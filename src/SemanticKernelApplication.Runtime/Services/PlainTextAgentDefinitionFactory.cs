@@ -19,7 +19,7 @@ public sealed class PlainTextAgentDefinitionFactory
         var description = request.Description.Trim();
         var name = BuildName(description);
         var role = BuildRole(description);
-        var provider = _providerCatalog.GetProvider(request.PreferredProviderId);
+        var provider = _providerCatalog.GetProvider(null);
 
         var goals = description
             .Split(['.', ';', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)

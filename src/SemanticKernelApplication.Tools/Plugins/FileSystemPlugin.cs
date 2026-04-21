@@ -1,17 +1,16 @@
 using System.ComponentModel;
-using Microsoft.Extensions.Options;
 using Microsoft.SemanticKernel;
-using SemanticKernelApplication.Tools.Configuration;
+using SemanticKernelApplication.Tools.Workspace;
 
 namespace SemanticKernelApplication.Tools.Plugins;
 
 public sealed class FileSystemPlugin
 {
-    private readonly WorkspaceToolOptions _options;
+    private readonly IWorkspaceContext _workspaceContext;
 
-    public FileSystemPlugin(IOptions<WorkspaceToolOptions> options)
+    public FileSystemPlugin(IWorkspaceContext workspaceContext)
     {
-        _options = options.Value;
+        _workspaceContext = workspaceContext;
     }
 
     [KernelFunction]
@@ -50,19 +49,32 @@ public sealed class FileSystemPlugin
         return string.Join(
             Environment.NewLine,
             Directory.EnumerateFileSystemEntries(fullPath)
-                .Select(entry => Path.GetRelativePath(_options.RootPath, entry))
+                .Select(entry => Path.GetRelativePath(_workspaceContext.CurrentRootPath, entry))
                 .OrderBy(entry => entry, StringComparer.OrdinalIgnoreCase));
     }
 
     private string ResolvePath(string path)
     {
-        var root = Path.GetFullPath(string.IsNullOrWhiteSpace(_options.RootPath) ? Environment.CurrentDirectory : _options.RootPath);
+        var root = _workspaceContext.CurrentRootPath;
         var combined = Path.GetFullPath(Path.Combine(root, string.IsNullOrWhiteSpace(path) ? "." : path));
-        if (!combined.StartsWith(root, StringComparison.OrdinalIgnoreCase))
+        if (!IsWithinRoot(root, combined))
         {
             throw new InvalidOperationException("Path escapes the configured workspace root.");
         }
 
         return combined;
+    }
+
+    private static bool IsWithinRoot(string root, string path)
+    {
+        if (string.Equals(root, path, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        var normalizedRoot = root.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+            + Path.DirectorySeparatorChar;
+
+        return path.StartsWith(normalizedRoot, StringComparison.OrdinalIgnoreCase);
     }
 }

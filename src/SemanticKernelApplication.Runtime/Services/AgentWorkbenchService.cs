@@ -2,9 +2,11 @@ using SemanticKernelApplication.Abstractions.Activities;
 using SemanticKernelApplication.Abstractions.Agents;
 using SemanticKernelApplication.Abstractions.Conversations;
 using SemanticKernelApplication.Abstractions.Orchestration;
-using SemanticKernelApplication.Abstractions.Providers;
 using SemanticKernelApplication.Abstractions.Workbench;
 using SemanticKernelApplication.Tools.Providers;
+using SemanticKernelApplication.Tools.Configuration;
+using SemanticKernelApplication.Tools.Workspace;
+using Microsoft.Extensions.Options;
 
 namespace SemanticKernelApplication.Runtime.Services;
 
@@ -18,6 +20,9 @@ public sealed class AgentWorkbenchService : IAgentWorkbenchService
     private readonly ICoordinatorOrchestrator _orchestrator;
     private readonly IActivitySink _activitySink;
     private readonly InMemoryActivityLog _activityLog;
+    private readonly IWorkspaceContext _workspaceContext;
+    private readonly IProviderSessionConfiguration _providerSessionConfiguration;
+    private readonly AgentProviderOptions _providerOptions;
     private string? _activeConversationId;
 
     public AgentWorkbenchService(
@@ -27,7 +32,10 @@ public sealed class AgentWorkbenchService : IAgentWorkbenchService
         PlainTextAgentDefinitionFactory definitionFactory,
         ICoordinatorOrchestrator orchestrator,
         IActivitySink activitySink,
-        InMemoryActivityLog activityLog)
+        InMemoryActivityLog activityLog,
+        IWorkspaceContext workspaceContext,
+        IProviderSessionConfiguration providerSessionConfiguration,
+        IOptions<AgentProviderOptions> providerOptions)
     {
         _agentDefinitionStore = agentDefinitionStore;
         _conversationStore = conversationStore;
@@ -36,6 +44,9 @@ public sealed class AgentWorkbenchService : IAgentWorkbenchService
         _orchestrator = orchestrator;
         _activitySink = activitySink;
         _activityLog = activityLog;
+        _workspaceContext = workspaceContext;
+        _providerSessionConfiguration = providerSessionConfiguration;
+        _providerOptions = providerOptions.Value;
     }
 
     public async Task<AgentDefinition> CreateAgentFromTextAsync(
@@ -75,7 +86,64 @@ public sealed class AgentWorkbenchService : IAgentWorkbenchService
         var providers = _providerCatalog.GetProviders();
         var activity = _activityLog.GetRecent(80);
 
-        return new WorkbenchSnapshot(agents, providers, conversation, activity);
+        return new WorkbenchSnapshot(
+            agents,
+            providers,
+            GetCurrentModelConfiguration(providers),
+            _workspaceContext.CurrentRootPath,
+            conversation,
+            activity);
+    }
+
+    public async Task<string> SetWorkspaceAsync(WorkspaceSelectionRequest request, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(request.WorkspacePath))
+        {
+            throw new ArgumentException("Workspace path is required.", nameof(request));
+        }
+
+        var workspacePath = _workspaceContext.SetRootPath(request.WorkspacePath);
+
+        await _activitySink.PublishAsync(
+            new ActivityStreamEnvelope(
+                "workbench",
+                new ActivityLogEntry(
+                    0,
+                    ActivityKind.Status,
+                    ActivityStatus.Completed,
+                    ActivitySeverity.Information,
+                    "Workspace updated",
+                    $"Agent tool execution is now constrained to {workspacePath}.",
+                    DateTimeOffset.UtcNow,
+                    Metadata: new Dictionary<string, string> { ["workspacePath"] = workspacePath })),
+            cancellationToken);
+
+        return workspacePath;
+    }
+
+    public async Task<GlobalModelConfiguration> SetGlobalModelConfigurationAsync(GlobalModelConfigurationRequest request, CancellationToken cancellationToken = default)
+    {
+        var configuration = _providerSessionConfiguration.Update(request, _providerOptions.Providers);
+
+        await _activitySink.PublishAsync(
+            new ActivityStreamEnvelope(
+                "workbench",
+                new ActivityLogEntry(
+                    0,
+                    ActivityKind.Status,
+                    ActivityStatus.Completed,
+                    ActivitySeverity.Information,
+                    "Global model updated",
+                    $"The coordinator and all agents will now use {configuration.SelectedProviderId}.",
+                    DateTimeOffset.UtcNow,
+                    Metadata: new Dictionary<string, string>
+                    {
+                        ["providerId"] = configuration.SelectedProviderId,
+                        ["apiKeyConfigured"] = configuration.ApiKeyConfigured.ToString()
+                    })),
+            cancellationToken);
+
+        return configuration;
     }
 
     public async Task<CoordinatorChatResponse> SendCoordinatorMessageAsync(
@@ -95,6 +163,57 @@ public sealed class AgentWorkbenchService : IAgentWorkbenchService
             "user",
             request.Message.Trim(),
             DateTimeOffset.UtcNow);
+
+        if (CoordinatorIntentParser.TryExtractAgentDescription(request.Message, out var agentDescription))
+        {
+            var agent = await CreateAgentFromTextAsync(new PlainTextAgentCreationRequest(agentDescription), cancellationToken);
+            var providerId = GetCurrentModelConfiguration(_providerCatalog.GetProviders()).SelectedProviderId;
+
+            var coordinatorMessageText = $"I created {agent.Name} and added it to the agent studio. It will participate using the current global model setting ({providerId}).";
+            var coordinatorMessage = new ConversationMessage(
+                Guid.NewGuid().ToString("N"),
+                thread.ThreadId,
+                ConversationMessageRole.Assistant,
+                CoordinatorId,
+                coordinatorMessageText,
+                DateTimeOffset.UtcNow);
+
+            thread = thread with
+            {
+                Messages = [.. thread.Messages, userMessage, coordinatorMessage],
+                UpdatedAtUtc = DateTimeOffset.UtcNow
+            };
+
+            thread = await _conversationStore.SaveAsync(thread, cancellationToken);
+            _activeConversationId = thread.ThreadId;
+
+            await _activitySink.PublishAsync(
+                new ActivityStreamEnvelope(
+                    thread.ThreadId,
+                    new ActivityLogEntry(
+                        0,
+                        ActivityKind.Coordination,
+                        ActivityStatus.Completed,
+                        ActivitySeverity.Information,
+                        "Coordinator created an agent",
+                        coordinatorMessageText,
+                        DateTimeOffset.UtcNow,
+                        ConversationId: thread.ThreadId,
+                        AgentId: agent.Id)),
+                cancellationToken);
+
+            return new CoordinatorChatResponse(
+                thread.ThreadId,
+                coordinatorMessageText,
+                new CoordinationResult(
+                    Guid.NewGuid().ToString("N"),
+                    ActivityStatus.Completed,
+                    thread,
+                    [],
+                    coordinatorMessageText,
+                    "Agent created by coordinator"),
+                _activityLog.GetRecent(40));
+        }
 
         thread = thread with
         {
@@ -135,18 +254,18 @@ public sealed class AgentWorkbenchService : IAgentWorkbenchService
                 request.Message.Trim()),
             cancellationToken);
 
-        var coordinatorMessageText = BuildCoordinatorSummary(result);
-        var coordinatorMessage = new ConversationMessage(
+        var coordinatorReplyText = BuildCoordinatorSummary(result);
+        var coordinatorReplyMessage = new ConversationMessage(
             Guid.NewGuid().ToString("N"),
             result.Thread.ThreadId,
             ConversationMessageRole.Assistant,
             CoordinatorId,
-            coordinatorMessageText,
+            coordinatorReplyText,
             DateTimeOffset.UtcNow);
 
         var updatedThread = result.Thread with
         {
-            Messages = [.. result.Thread.Messages, coordinatorMessage],
+            Messages = [.. result.Thread.Messages, coordinatorReplyMessage],
             UpdatedAtUtc = DateTimeOffset.UtcNow
         };
 
@@ -162,14 +281,14 @@ public sealed class AgentWorkbenchService : IAgentWorkbenchService
                     ActivityStatus.Completed,
                     ActivitySeverity.Information,
                     "Coordinator reply ready",
-                    coordinatorMessageText,
+                    coordinatorReplyText,
                     DateTimeOffset.UtcNow,
                     ConversationId: updatedThread.ThreadId)),
             cancellationToken);
 
         return new CoordinatorChatResponse(
             updatedThread.ThreadId,
-            coordinatorMessageText,
+            coordinatorReplyText,
             result with { Thread = updatedThread },
             _activityLog.GetRecent(40));
     }
@@ -219,11 +338,24 @@ public sealed class AgentWorkbenchService : IAgentWorkbenchService
         return thread;
     }
 
+    private GlobalModelConfiguration GetCurrentModelConfiguration(IReadOnlyList<Abstractions.Providers.ModelProviderDefinition> providers)
+    {
+        var selectedProvider = providers.FirstOrDefault(provider =>
+                string.Equals(provider.Id, _providerSessionConfiguration.SelectedProviderId, StringComparison.OrdinalIgnoreCase))
+            ?? providers.FirstOrDefault(provider => provider.IsDefault)
+            ?? providers.First();
+
+        var apiKeyConfigured = selectedProvider.Kind == Abstractions.Providers.AiProviderKind.Demo
+            || !string.IsNullOrWhiteSpace(_providerSessionConfiguration.ApiKey);
+
+        return new GlobalModelConfiguration(selectedProvider.Id, apiKeyConfigured);
+    }
+
     private static string BuildCoordinatorSummary(CoordinationResult result)
     {
         if (result.Rounds.Count == 0)
         {
-            return "No specialists were available. Create an agent from the studio panel and I’ll route future work through it.";
+            return "No specialists were available. Create an agent from the studio panel and I'll route future work through it.";
         }
 
         var latestMessages = result.Rounds

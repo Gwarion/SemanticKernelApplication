@@ -35,8 +35,10 @@ public static class ActivityStreamEndpointRouteBuilderExtensions
         httpContext.Response.Headers["X-Accel-Buffering"] = "no";
         httpContext.Response.ContentType = "text/event-stream";
 
-        await httpContext.Response.WriteAsync("retry: 2000\n\n", cancellationToken);
-        await httpContext.Response.Body.FlushAsync(cancellationToken);
+        if (!await TryWriteAsync(httpContext, "retry: 2000\n\n", cancellationToken))
+        {
+            return;
+        }
 
         var eventEnumerator = activityEventStream
             .SubscribeAsync(stream, replay ?? 0, cancellationToken)
@@ -44,9 +46,10 @@ public static class ActivityStreamEndpointRouteBuilderExtensions
 
         try
         {
+            var moveNextTask = eventEnumerator.MoveNextAsync().AsTask();
+
             while (!cancellationToken.IsCancellationRequested)
             {
-                var moveNextTask = eventEnumerator.MoveNextAsync().AsTask();
                 var completedTask = await Task.WhenAny(moveNextTask, Task.Delay(TimeSpan.FromSeconds(15), cancellationToken));
 
                 if (completedTask == moveNextTask)
@@ -57,21 +60,74 @@ public static class ActivityStreamEndpointRouteBuilderExtensions
                     }
 
                     var payload = JsonSerializer.Serialize(eventEnumerator.Current, SerializerOptions);
-                    await httpContext.Response.WriteAsync($"id: {eventEnumerator.Current.Sequence}\n", cancellationToken);
-                    await httpContext.Response.WriteAsync("event: activity\n", cancellationToken);
-                    await httpContext.Response.WriteAsync($"data: {payload}\n\n", cancellationToken);
+                    if (!await TryWriteAsync(httpContext, $"id: {eventEnumerator.Current.Sequence}\n", cancellationToken) ||
+                        !await TryWriteAsync(httpContext, "event: activity\n", cancellationToken) ||
+                        !await TryWriteAsync(httpContext, $"data: {payload}\n\n", cancellationToken))
+                    {
+                        break;
+                    }
+
+                    moveNextTask = eventEnumerator.MoveNextAsync().AsTask();
                 }
                 else
                 {
-                    await httpContext.Response.WriteAsync(": keepalive\n\n", cancellationToken);
+                    if (!await TryWriteAsync(httpContext, ": keepalive\n\n", cancellationToken))
+                    {
+                        break;
+                    }
                 }
 
-                await httpContext.Response.Body.FlushAsync(cancellationToken);
+                if (!await TryFlushAsync(httpContext, cancellationToken))
+                {
+                    break;
+                }
             }
         }
         finally
         {
             await eventEnumerator.DisposeAsync();
+        }
+    }
+
+    private static async Task<bool> TryWriteAsync(HttpContext httpContext, string content, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await httpContext.Response.WriteAsync(content, cancellationToken);
+            return true;
+        }
+        catch (OperationCanceledException)
+        {
+            return false;
+        }
+        catch (IOException)
+        {
+            return false;
+        }
+        catch (ObjectDisposedException)
+        {
+            return false;
+        }
+    }
+
+    private static async Task<bool> TryFlushAsync(HttpContext httpContext, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await httpContext.Response.Body.FlushAsync(cancellationToken);
+            return true;
+        }
+        catch (OperationCanceledException)
+        {
+            return false;
+        }
+        catch (IOException)
+        {
+            return false;
+        }
+        catch (ObjectDisposedException)
+        {
+            return false;
         }
     }
 

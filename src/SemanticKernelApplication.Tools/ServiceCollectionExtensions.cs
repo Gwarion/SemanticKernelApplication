@@ -4,6 +4,7 @@ using SemanticKernelApplication.Tools.Configuration;
 using SemanticKernelApplication.Tools.Kernel;
 using SemanticKernelApplication.Tools.Plugins;
 using SemanticKernelApplication.Tools.Providers;
+using SemanticKernelApplication.Tools.Workspace;
 
 namespace SemanticKernelApplication.Tools;
 
@@ -17,6 +18,8 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<FileSystemPlugin>();
         services.AddSingleton<ShellPlugin>();
         services.AddSingleton<GitPlugin>();
+        services.AddSingleton<IWorkspaceContext, WorkspaceContext>();
+        services.AddSingleton<IProviderSessionConfiguration, ProviderSessionConfiguration>();
         services.AddSingleton<IWorkspacePluginCatalog, WorkspacePluginCatalog>();
         services.AddSingleton<IAiProviderCatalog, ConfigurationAiProviderCatalog>();
 

@@ -14,15 +14,18 @@ public sealed class SemanticKernelAgentExecutor : IAgentExecutor
     private readonly IAiProviderCatalog _providerCatalog;
     private readonly AgentProviderOptions _providerOptions;
     private readonly IWorkspacePluginCatalog _pluginCatalog;
+    private readonly IProviderSessionConfiguration _providerSessionConfiguration;
 
     public SemanticKernelAgentExecutor(
         IAiProviderCatalog providerCatalog,
         IOptions<AgentProviderOptions> providerOptions,
-        IWorkspacePluginCatalog pluginCatalog)
+        IWorkspacePluginCatalog pluginCatalog,
+        IProviderSessionConfiguration providerSessionConfiguration)
     {
         _providerCatalog = providerCatalog;
         _providerOptions = providerOptions.Value;
         _pluginCatalog = pluginCatalog;
+        _providerSessionConfiguration = providerSessionConfiguration;
     }
 
     public async Task<AgentExecutionResult> ExecuteAsync(
@@ -32,7 +35,7 @@ public sealed class SemanticKernelAgentExecutor : IAgentExecutor
         cancellationToken.ThrowIfCancellationRequested();
 
         var startedAt = DateTimeOffset.UtcNow;
-        var provider = _providerCatalog.GetProvider(request.Agent.Metadata?.GetValueOrDefault("providerId") ?? request.Metadata?.GetValueOrDefault("providerId"));
+        var provider = _providerCatalog.GetProvider(null);
 
         if (provider is null || provider.Kind == AiProviderKind.Demo || !provider.IsConfigured)
         {
@@ -41,7 +44,7 @@ public sealed class SemanticKernelAgentExecutor : IAgentExecutor
 
         try
         {
-            var registration = _providerOptions.Providers.FirstOrDefault(item => string.Equals(item.Id, provider.Id, StringComparison.OrdinalIgnoreCase));
+            var registration = _providerSessionConfiguration.ResolveSelectedProvider(_providerOptions.Providers);
             if (registration is null)
             {
                 return BuildFallbackResult(request, startedAt, provider);
@@ -89,16 +92,16 @@ public sealed class SemanticKernelAgentExecutor : IAgentExecutor
         switch (provider.Kind)
         {
             case AiProviderKind.OpenAI:
-                builder.AddOpenAIChatCompletion(provider.ModelId, provider.ApiKey!);
+                builder.AddOpenAIChatCompletion(provider.ModelId, _providerSessionConfiguration.ApiKey!);
                 break;
             case AiProviderKind.OpenAICompatible:
-                builder.AddOpenAIChatCompletion(provider.ModelId, new Uri(provider.Endpoint!), provider.ApiKey!, provider.OrganizationId, serviceId: provider.Id);
+                builder.AddOpenAIChatCompletion(provider.ModelId, new Uri(provider.Endpoint!), _providerSessionConfiguration.ApiKey!, provider.OrganizationId, serviceId: provider.Id);
                 break;
             case AiProviderKind.GoogleGemini:
-                builder.AddGoogleAIGeminiChatCompletion(provider.ModelId, provider.ApiKey!, serviceId: provider.Id);
+                builder.AddGoogleAIGeminiChatCompletion(provider.ModelId, _providerSessionConfiguration.ApiKey!, serviceId: provider.Id);
                 break;
             case AiProviderKind.Mistral:
-                builder.AddMistralChatCompletion(provider.ModelId, provider.ApiKey!, endpoint: string.IsNullOrWhiteSpace(provider.Endpoint) ? null : new Uri(provider.Endpoint), serviceId: provider.Id);
+                builder.AddMistralChatCompletion(provider.ModelId, _providerSessionConfiguration.ApiKey!, endpoint: string.IsNullOrWhiteSpace(provider.Endpoint) ? null : new Uri(provider.Endpoint), serviceId: provider.Id);
                 break;
             case AiProviderKind.Anthropic:
                 throw new InvalidOperationException("Anthropic is configured in the provider catalog, but this starter does not yet include a first-party Semantic Kernel Anthropic connector.");

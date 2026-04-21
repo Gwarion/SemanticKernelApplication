@@ -10,7 +10,7 @@
     <section class="hero-card">
         <div>
             <p class="eyebrow">Coordinator-driven agent studio</p>
-            <h2>Describe agents in plain language, coordinate them from one chat, and watch public runtime activity stream back live.</h2>
+            <h2>Talk to one coordinator, let it create specialists from natural language, and follow the workbench in plain English.</h2>
         </div>
 
         <div class="hero-stats">
@@ -20,7 +20,7 @@
             </article>
             <article>
                 <span>@Providers.Count</span>
-                <small>Providers</small>
+                <small>Models</small>
             </article>
             <article>
                 <span>@ActivityFeed.Count</span>
@@ -29,12 +29,74 @@
         </div>
     </section>
 
+    <section class="setup-card">
+        <div class="setup-copy">
+            <p class="panel-label">Setup</p>
+            <h3>Choose one global model and one constrained workspace for the whole bench.</h3>
+            <p>API keys stay in memory for this app session and are not stored in the repo config.</p>
+        </div>
+
+        <div class="setup-grid">
+            <div class="setup-field">
+                <label for="workspace-path">Workspace folder</label>
+                <div class="setup-row">
+                    <input id="workspace-path"
+                           list="workspace-path-suggestions"
+                           @bind="WorkspacePathInput"
+                           @bind:event="oninput"
+                           placeholder="C:\Projects\SemanticKernelApplication" />
+                    <button class="primary-button" @onclick="ApplyWorkspaceAsync" disabled="@(!CanApplyWorkspace)">
+                        @(IsWorkspaceBusy ? "Applying..." : "Apply")
+                    </button>
+                </div>
+                <datalist id="workspace-path-suggestions">
+                    @foreach (var suggestion in WorkspaceSuggestions)
+                    {
+                        <option value="@suggestion"></option>
+                    }
+                </datalist>
+                <small>Active: @ActiveWorkspacePath</small>
+            </div>
+
+            <div class="setup-field">
+                <label for="global-provider">Global model</label>
+                <div class="setup-row">
+                    <select id="global-provider" @bind="SelectedProviderId">
+                        @foreach (var provider in Providers)
+                        {
+                            <option value="@provider.Id">@provider.DisplayName (@provider.Kind)</option>
+                        }
+                    </select>
+                    <button class="primary-button" @onclick="ApplyModelAsync" disabled="@(!CanApplyModel)">
+                        @(IsModelBusy ? "Updating..." : "Apply")
+                    </button>
+                </div>
+                <small>Current: @CurrentModelLabel</small>
+            </div>
+
+            <div class="setup-field">
+                <label for="api-key">API key for the selected model</label>
+                <input id="api-key"
+                       type="password"
+                       @bind="ApiKeyInput"
+                       @bind:event="oninput"
+                       placeholder="Paste a key for the selected provider" />
+                <small>@(ApiKeyConfigured ? "A session key is loaded for the current model." : "No session key loaded for the current model.")</small>
+            </div>
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(SetupFeedback))
+        {
+            <p class="setup-feedback">@SetupFeedback</p>
+        }
+    </section>
+
     <section class="workbench-grid">
         <div class="panel chat-panel">
             <div class="panel-header">
                 <div>
                     <p class="panel-label">Coordinator chat</p>
-                    <h3>One conversation thread for the whole bench</h3>
+                    <h3>Ask for work or tell the coordinator to create a new agent</h3>
                 </div>
             </div>
 
@@ -43,7 +105,7 @@
                 {
                     <div class="empty-state">
                         <strong>No conversation yet</strong>
-                        <p>Create an agent from plain text, then send the coordinator a goal.</p>
+                        <p>Try: “Create an agent that reviews backend architecture and async flows.”</p>
                     </div>
                 }
                 else
@@ -64,7 +126,7 @@
 
             <div class="composer">
                 <label for="chat-message">Brief the coordinator</label>
-                <textarea id="chat-message" rows="5" @bind="ChatMessage" placeholder="Example: Compare the current agents, pick the best one for repository onboarding, and summarize the next steps."></textarea>
+                <textarea id="chat-message" rows="5" @bind="ChatMessage" placeholder="Example: Create an agent that reviews PRs for security regressions, then summarize how it will help the team."></textarea>
                 <div class="composer-actions">
                     <span>@(IsBusy ? "Coordinator is working..." : "Ready")</span>
                     <button class="primary-button" @onclick="SendAsync" disabled="@IsBusy">Send</button>
@@ -76,7 +138,7 @@
             <div class="panel-header">
                 <div>
                     <p class="panel-label">Live output</p>
-                    <h3>Safe runtime activity summaries</h3>
+                    <h3>Public progress only</h3>
                 </div>
             </div>
 
@@ -108,22 +170,13 @@
             <div class="panel-header">
                 <div>
                     <p class="panel-label">Agent studio</p>
-                    <h3>Plain text becomes a typed backend agent</h3>
+                    <h3>Created specialists appear here automatically</h3>
                 </div>
             </div>
 
             <div class="studio-form">
-                <label for="agent-description">Describe the agent you want</label>
-                <textarea id="agent-description" rows="6" @bind="AgentDescription" placeholder="Example: A backend .NET specialist that reviews API boundaries, dependency injection, and asynchronous workflows before code ships."></textarea>
-
-                <label for="provider-select">Preferred provider</label>
-                <select id="provider-select" @bind="SelectedProviderId">
-                    @foreach (var provider in Providers)
-                    {
-                        <option value="@provider.Id">@provider.DisplayName (@provider.Kind)</option>
-                    }
-                </select>
-
+                <label for="agent-description">Create directly from the studio if needed</label>
+                <textarea id="agent-description" rows="5" @bind="AgentDescription" placeholder="Example: A frontend specialist that critiques mobile layouts and interaction flow."></textarea>
                 <button class="primary-button" @onclick="CreateAgentAsync" disabled="@IsBusy">Create agent</button>
             </div>
 
@@ -132,7 +185,7 @@
                 {
                     <div class="empty-state">
                         <strong>No agents created yet</strong>
-                        <p>The final app stays generic: you define the specialists from this panel.</p>
+                        <p>The coordinator can create them for you from the chat panel.</p>
                     </div>
                 }
                 else
@@ -142,7 +195,7 @@
                         <article class="agent-card">
                             <div class="agent-topline">
                                 <strong>@agent.Name</strong>
-                                <span>@(agent.ProviderId ?? "demo")</span>
+                                <span>@CurrentModelLabel</span>
                             </div>
                             <p class="agent-role">@agent.Description</p>
                             <p class="agent-prompt">@agent.Instructions.SystemPrompt</p>
@@ -161,13 +214,38 @@
     private List<ConversationMessage> Messages { get; set; } = [];
     private string ChatMessage { get; set; } = string.Empty;
     private string AgentDescription { get; set; } = string.Empty;
+    private string WorkspacePathInput { get; set; } = string.Empty;
+    private string ActiveWorkspacePath { get; set; } = string.Empty;
+    private string ApiKeyInput { get; set; } = string.Empty;
+    private string SetupFeedback { get; set; } = string.Empty;
     private string? ActiveConversationId { get; set; }
     private string? SelectedProviderId { get; set; }
+    private bool ApiKeyConfigured { get; set; }
     private bool IsBusy { get; set; }
+    private bool IsWorkspaceBusy { get; set; }
+    private bool IsModelBusy { get; set; }
 
     private IJSObjectReference? _module;
     private IJSObjectReference? _subscription;
     private DotNetObjectReference<Home>? _objectReference;
+
+    private bool CanApplyWorkspace =>
+        !IsWorkspaceBusy
+        && !string.IsNullOrWhiteSpace(WorkspacePathInput)
+        && !string.Equals(WorkspacePathInput.Trim(), ActiveWorkspacePath, StringComparison.Ordinal);
+
+    private bool CanApplyModel =>
+        !IsModelBusy
+        && !string.IsNullOrWhiteSpace(SelectedProviderId);
+
+    private IEnumerable<string> WorkspaceSuggestions =>
+        new[] { ActiveWorkspacePath, WorkspacePathInput }
+            .Where(path => !string.IsNullOrWhiteSpace(path))
+            .Select(path => path.Trim())
+            .Distinct(StringComparer.Ordinal);
+
+    private string CurrentModelLabel =>
+        Providers.FirstOrDefault(provider => provider.Id == SelectedProviderId)?.DisplayName ?? "None";
 
     protected override async Task OnInitializedAsync()
     {
@@ -191,10 +269,69 @@
         var snapshot = await Workbench.GetSnapshotAsync();
         Agents = snapshot.Agents.ToList();
         Providers = snapshot.Providers.ToList();
+        ActiveWorkspacePath = snapshot.WorkspacePath;
+        WorkspacePathInput = string.IsNullOrWhiteSpace(WorkspacePathInput) ? snapshot.WorkspacePath : WorkspacePathInput;
+        SelectedProviderId = snapshot.ModelConfiguration.SelectedProviderId;
+        ApiKeyConfigured = snapshot.ModelConfiguration.ApiKeyConfigured;
         Messages = snapshot.ActiveConversation?.Messages.OrderBy(message => message.CreatedAtUtc).ToList() ?? [];
         ActiveConversationId = snapshot.ActiveConversation?.ThreadId;
-        SelectedProviderId ??= Providers.FirstOrDefault(provider => provider.IsDefault)?.Id ?? Providers.FirstOrDefault()?.Id;
         MergeActivity(snapshot.RecentActivity.Select(ToViewModel));
+    }
+
+    private async Task ApplyWorkspaceAsync()
+    {
+        if (!CanApplyWorkspace)
+        {
+            return;
+        }
+
+        IsWorkspaceBusy = true;
+        SetupFeedback = string.Empty;
+
+        try
+        {
+            ActiveWorkspacePath = await Workbench.SetWorkspaceAsync(new WorkspaceSelectionRequest(WorkspacePathInput.Trim()));
+            WorkspacePathInput = ActiveWorkspacePath;
+            SetupFeedback = "Workspace updated for the current workbench session.";
+            await RefreshSnapshotAsync();
+        }
+        catch (Exception ex)
+        {
+            SetupFeedback = ex.Message;
+        }
+        finally
+        {
+            IsWorkspaceBusy = false;
+        }
+    }
+
+    private async Task ApplyModelAsync()
+    {
+        if (!CanApplyModel)
+        {
+            return;
+        }
+
+        IsModelBusy = true;
+        SetupFeedback = string.Empty;
+
+        try
+        {
+            var configuration = await Workbench.SetGlobalModelConfigurationAsync(
+                new GlobalModelConfigurationRequest(SelectedProviderId!, ApiKeyInput));
+            SelectedProviderId = configuration.SelectedProviderId;
+            ApiKeyConfigured = configuration.ApiKeyConfigured;
+            SetupFeedback = "Global model settings updated for this app session.";
+            await RefreshSnapshotAsync();
+        }
+        catch (Exception ex)
+        {
+            SetupFeedback = ex.Message;
+        }
+        finally
+        {
+            IsModelBusy = false;
+        }
     }
 
     private async Task CreateAgentAsync()
@@ -207,7 +344,7 @@
         IsBusy = true;
         try
         {
-            await Workbench.CreateAgentFromTextAsync(new PlainTextAgentCreationRequest(AgentDescription.Trim(), SelectedProviderId));
+            await Workbench.CreateAgentFromTextAsync(new PlainTextAgentCreationRequest(AgentDescription.Trim()));
             AgentDescription = string.Empty;
             await RefreshSnapshotAsync();
         }
@@ -232,6 +369,7 @@
             Messages = response.Result.Thread.Messages.OrderBy(message => message.CreatedAtUtc).ToList();
             MergeActivity(response.Activity.Select(ToViewModel));
             ChatMessage = string.Empty;
+            await RefreshSnapshotAsync();
         }
         finally
         {
@@ -246,13 +384,14 @@
             ?? envelope.Source
             ?? envelope.Type;
 
-        MergeActivity([
+        MergeActivity(new[]
+        {
             new ActivityViewModel(
                 envelope.Sequence,
                 title,
                 envelope.Message ?? string.Empty,
                 envelope.Timestamp)
-        ]);
+        });
 
         return InvokeAsync(StateHasChanged);
     }

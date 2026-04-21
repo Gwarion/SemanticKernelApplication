@@ -1,5 +1,4 @@
 using System.Collections.Concurrent;
-using System.Runtime.CompilerServices;
 using System.Threading.Channels;
 
 namespace SemanticKernelApplication.Web.Services;
@@ -72,7 +71,17 @@ public sealed class ActivityEventStream : IActivityEventStream
         var subscriber = new Subscriber(stream, channel);
         _subscribers[subscriptionId] = subscriber;
 
-        return ReadSubscription(subscriptionId, subscriber, replayCount, cancellationToken);
+        foreach (var envelope in GetRecentEvents(subscriber.Stream, replayCount))
+        {
+            subscriber.Writer.TryWrite(envelope);
+        }
+
+        if (cancellationToken.CanBeCanceled)
+        {
+            cancellationToken.Register(() => RemoveSubscriber(subscriptionId, subscriber));
+        }
+
+        return subscriber.Reader.ReadAllAsync(cancellationToken);
     }
 
     public IReadOnlyList<ActivityEventEnvelope> GetRecentEvents(string? stream = null, int count = 50)
@@ -92,31 +101,6 @@ public sealed class ActivityEventStream : IActivityEventStream
         }
     }
 
-    private async IAsyncEnumerable<ActivityEventEnvelope> ReadSubscription(
-        Guid subscriptionId,
-        Subscriber subscriber,
-        int replayCount,
-        [EnumeratorCancellation] CancellationToken cancellationToken)
-    {
-        try
-        {
-            foreach (var envelope in GetRecentEvents(subscriber.Stream, replayCount))
-            {
-                yield return envelope;
-            }
-
-            await foreach (var envelope in subscriber.Reader.ReadAllAsync(cancellationToken))
-            {
-                yield return envelope;
-            }
-        }
-        finally
-        {
-            _subscribers.TryRemove(subscriptionId, out _);
-            subscriber.Writer.TryComplete();
-        }
-    }
-
     private void AddToHistory(ActivityEventEnvelope envelope)
     {
         lock (_historyLock)
@@ -128,6 +112,12 @@ public sealed class ActivityEventStream : IActivityEventStream
                 _history.RemoveRange(0, _history.Count - MaxHistory);
             }
         }
+    }
+
+    private void RemoveSubscriber(Guid subscriptionId, Subscriber subscriber)
+    {
+        _subscribers.TryRemove(subscriptionId, out _);
+        subscriber.Writer.TryComplete();
     }
 
     private static bool MatchesStream(ActivityEventEnvelope envelope, string? stream) =>

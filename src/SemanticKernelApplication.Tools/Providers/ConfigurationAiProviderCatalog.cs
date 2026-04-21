@@ -6,35 +6,50 @@ namespace SemanticKernelApplication.Tools.Providers;
 
 public sealed class ConfigurationAiProviderCatalog : IAiProviderCatalog
 {
-    private readonly IReadOnlyList<ModelProviderDefinition> _providers;
+    private readonly AgentProviderOptions _options;
+    private readonly IProviderSessionConfiguration _sessionConfiguration;
 
-    public ConfigurationAiProviderCatalog(IOptions<AgentProviderOptions> options)
+    public ConfigurationAiProviderCatalog(
+        IOptions<AgentProviderOptions> options,
+        IProviderSessionConfiguration sessionConfiguration)
     {
-        _providers = options.Value.Providers
-            .Select(provider => new ModelProviderDefinition(
-                provider.Id,
-                provider.DisplayName,
-                provider.Kind,
-                provider.ModelId,
-                IsConfigured(provider),
-                provider.IsDefault))
-            .ToArray();
+        _options = options.Value;
+        _sessionConfiguration = sessionConfiguration;
     }
 
     public ModelProviderDefinition? GetProvider(string? providerId)
     {
         if (string.IsNullOrWhiteSpace(providerId))
         {
-            return _providers.FirstOrDefault(provider => provider.IsDefault) ?? _providers.FirstOrDefault();
+            var selected = _sessionConfiguration.ResolveSelectedProvider(_options.Providers);
+            return selected is null ? null : ToDefinition(selected);
         }
 
-        return _providers.FirstOrDefault(provider => string.Equals(provider.Id, providerId, StringComparison.OrdinalIgnoreCase));
+        var provider = _options.Providers.FirstOrDefault(provider => string.Equals(provider.Id, providerId, StringComparison.OrdinalIgnoreCase));
+        return provider is null ? null : ToDefinition(provider);
     }
 
-    public IReadOnlyList<ModelProviderDefinition> GetProviders() => _providers;
+    public IReadOnlyList<ModelProviderDefinition> GetProviders() => _options.Providers.Select(ToDefinition).ToArray();
 
-    private static bool IsConfigured(AgentProviderRegistration provider)
+    private ModelProviderDefinition ToDefinition(AgentProviderRegistration provider)
     {
-        return provider.Kind == AiProviderKind.Demo || !string.IsNullOrWhiteSpace(provider.ApiKey);
+        var selected = _sessionConfiguration.ResolveSelectedProvider(_options.Providers);
+        var apiKeyConfigured = provider.Kind == AiProviderKind.Demo
+            || (selected is not null
+                && string.Equals(selected.Id, provider.Id, StringComparison.OrdinalIgnoreCase)
+                && !string.IsNullOrWhiteSpace(_sessionConfiguration.ApiKey));
+
+        var isSelected = selected is not null && string.Equals(selected.Id, provider.Id, StringComparison.OrdinalIgnoreCase);
+        var isDefault = selected is null
+            ? provider.IsDefault
+            : isSelected;
+
+        return new ModelProviderDefinition(
+            provider.Id,
+            provider.DisplayName,
+            provider.Kind,
+            provider.ModelId,
+            apiKeyConfigured,
+            isDefault);
     }
 }

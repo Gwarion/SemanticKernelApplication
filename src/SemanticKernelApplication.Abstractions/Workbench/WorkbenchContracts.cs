@@ -14,6 +14,16 @@ public sealed record CoordinatorChatRequest(
     string Message,
     string? ConversationId = null);
 
+public sealed record WorkspaceSelectionRequest(string WorkspacePath);
+
+public sealed record GlobalModelConfiguration(
+    string SelectedProviderId,
+    bool ApiKeyConfigured);
+
+public sealed record GlobalModelConfigurationRequest(
+    string SelectedProviderId,
+    string? ApiKey = null);
+
 public sealed record CoordinatorChatResponse(
     string ConversationId,
     string CoordinatorMessage,
@@ -23,6 +33,8 @@ public sealed record CoordinatorChatResponse(
 public sealed record WorkbenchSnapshot(
     IReadOnlyList<AgentDefinition> Agents,
     IReadOnlyList<ModelProviderDefinition> Providers,
+    GlobalModelConfiguration ModelConfiguration,
+    string WorkspacePath,
     ConversationThread? ActiveConversation,
     IReadOnlyList<ActivityLogEntry> RecentActivity);
 
@@ -32,6 +44,14 @@ public interface IAgentWorkbenchService
 
     Task<AgentDefinition> CreateAgentFromTextAsync(
         PlainTextAgentCreationRequest request,
+        CancellationToken cancellationToken = default);
+
+    Task<string> SetWorkspaceAsync(
+        WorkspaceSelectionRequest request,
+        CancellationToken cancellationToken = default);
+
+    Task<GlobalModelConfiguration> SetGlobalModelConfigurationAsync(
+        GlobalModelConfigurationRequest request,
         CancellationToken cancellationToken = default);
 
     Task<CoordinatorChatResponse> SendCoordinatorMessageAsync(

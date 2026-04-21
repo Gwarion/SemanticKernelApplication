@@ -4,16 +4,19 @@ using System.Text;
 using Microsoft.Extensions.Options;
 using Microsoft.SemanticKernel;
 using SemanticKernelApplication.Tools.Configuration;
+using SemanticKernelApplication.Tools.Workspace;
 
 namespace SemanticKernelApplication.Tools.Plugins;
 
 public sealed class ShellPlugin
 {
     private readonly WorkspaceToolOptions _options;
+    private readonly IWorkspaceContext _workspaceContext;
 
-    public ShellPlugin(IOptions<WorkspaceToolOptions> options)
+    public ShellPlugin(IOptions<WorkspaceToolOptions> options, IWorkspaceContext workspaceContext)
     {
         _options = options.Value;
+        _workspaceContext = workspaceContext;
     }
 
     [KernelFunction]
@@ -32,7 +35,7 @@ public sealed class ShellPlugin
         {
             FileName = fileName,
             Arguments = arguments,
-            WorkingDirectory = string.IsNullOrWhiteSpace(_options.RootPath) ? Environment.CurrentDirectory : _options.RootPath,
+            WorkingDirectory = _workspaceContext.CurrentRootPath,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             UseShellExecute = false,
