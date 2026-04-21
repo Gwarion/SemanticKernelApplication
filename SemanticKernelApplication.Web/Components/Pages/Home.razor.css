@@ -152,6 +152,18 @@
     margin: 0.45rem 0 0;
 }
 
+.activity-entry-error {
+    background: #fff1f1;
+    border: 1px solid #efc5c5;
+}
+
+.activity-detail {
+    color: #7f1d1d;
+    font-family: "Consolas", "Cascadia Mono", monospace;
+    font-size: 0.86rem;
+    white-space: pre-wrap;
+}
+
 .composer textarea,
 .studio-form textarea,
 .setup-row input,

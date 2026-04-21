@@ -1,5 +1,8 @@
 using Microsoft.SemanticKernel;
 using Microsoft.SemanticKernel.ChatCompletion;
+using Microsoft.SemanticKernel.Connectors.Google;
+using Microsoft.SemanticKernel.Connectors.MistralAI;
+using Microsoft.SemanticKernel.Connectors.OpenAI;
 using SemanticKernelApplication.Abstractions.Agents;
 using SemanticKernelApplication.Abstractions.Providers;
 using SemanticKernelApplication.Tools.Configuration;
@@ -59,8 +62,13 @@ public sealed class SemanticKernelAgentExecutor : IAgentExecutor
             var chat = kernel.GetRequiredService<IChatCompletionService>();
             var history = new ChatHistory(BuildSystemPrompt(request));
             history.AddUserMessage(request.Input);
+            var executionSettings = CreateExecutionSettings(registration);
 
-            var response = await chat.GetChatMessageContentAsync(history, cancellationToken: cancellationToken);
+            var response = await chat.GetChatMessageContentAsync(
+                history,
+                executionSettings,
+                kernel,
+                cancellationToken);
             var text = string.IsNullOrWhiteSpace(response.Content)
                 ? $"Agent {request.Agent.DisplayName} completed without a visible message."
                 : response.Content;
@@ -81,8 +89,28 @@ public sealed class SemanticKernelAgentExecutor : IAgentExecutor
                 Summary: $"Execution failed for {request.Agent.DisplayName}",
                 StartedAtUtc: startedAt,
                 CompletedAtUtc: DateTimeOffset.UtcNow,
-                FailureReason: exception.Message);
+                FailureReason: $"{exception.GetType().Name}: {exception.Message}");
         }
+    }
+
+    private static PromptExecutionSettings? CreateExecutionSettings(AgentProviderRegistration provider)
+    {
+        return provider.Kind switch
+        {
+            AiProviderKind.OpenAI or AiProviderKind.OpenAICompatible => new OpenAIPromptExecutionSettings
+            {
+                ToolCallBehavior = ToolCallBehavior.AutoInvokeKernelFunctions
+            },
+            AiProviderKind.GoogleGemini => new GeminiPromptExecutionSettings
+            {
+                ToolCallBehavior = GeminiToolCallBehavior.AutoInvokeKernelFunctions
+            },
+            AiProviderKind.Mistral => new MistralAIPromptExecutionSettings
+            {
+                ToolCallBehavior = MistralAIToolCallBehavior.AutoInvokeKernelFunctions
+            },
+            _ => null
+        };
     }
 
     private Kernel BuildKernel(AgentProviderRegistration provider)
@@ -144,6 +172,8 @@ public sealed class SemanticKernelAgentExecutor : IAgentExecutor
         return $"""
             You are {request.Agent.DisplayName}.
             Public role description: {agentDescription}
+            When a task requires workspace changes, file edits, or command execution, use the available tools instead of only describing what you would do.
+            Keep all tool usage constrained to the configured workspace.
             Respond with useful, concise output suitable for a shared team activity panel.
             Do not reveal hidden chain-of-thought. Summarize your reasoning briefly and focus on next steps.
             """;

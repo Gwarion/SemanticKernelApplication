@@ -140,7 +140,7 @@
             </div>
 
             <div class="activity-stream">
-                @if (ActivityFeed.Count == 0)
+                @if (!ProgressFeed.Any())
                 {
                     <div class="empty-state">
                         <strong>No activity yet</strong>
@@ -149,7 +149,7 @@
                 }
                 else
                 {
-                    @foreach (var entry in ActivityFeed)
+                    @foreach (var entry in ProgressFeed)
                     {
                         <article class="activity-entry">
                             <div class="activity-header">
@@ -157,6 +157,42 @@
                                 <span>@entry.Timestamp.ToLocalTime().ToString("HH:mm:ss")</span>
                             </div>
                             <p>@entry.Message</p>
+                        </article>
+                    }
+                }
+            </div>
+        </div>
+
+        <div class="panel exception-panel">
+            <div class="panel-header">
+                <div>
+                    <p class="panel-label">Exceptions</p>
+                    <h3>Agent and tool failures</h3>
+                </div>
+            </div>
+
+            <div class="activity-stream">
+                @if (!ExceptionFeed.Any())
+                {
+                    <div class="empty-state">
+                        <strong>No failures captured</strong>
+                        <p>If an agent run or tool invocation fails, the underlying reason will appear here.</p>
+                    </div>
+                }
+                else
+                {
+                    @foreach (var entry in ExceptionFeed)
+                    {
+                        <article class="activity-entry activity-entry-error">
+                            <div class="activity-header">
+                                <strong>@entry.Title</strong>
+                                <span>@entry.Timestamp.ToLocalTime().ToString("HH:mm:ss")</span>
+                            </div>
+                            <p>@entry.Message</p>
+                            @if (!string.IsNullOrWhiteSpace(entry.Details))
+                            {
+                                <p class="activity-detail">@entry.Details</p>
+                            }
                         </article>
                     }
                 }

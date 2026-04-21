@@ -51,6 +51,12 @@ public partial class Home : IAsyncDisposable
             .Select(path => path.Trim())
             .Distinct(StringComparer.Ordinal);
 
+    private IEnumerable<ActivityViewModel> ProgressFeed =>
+        ActivityFeed.Where(item => !item.IsError);
+
+    private IEnumerable<ActivityViewModel> ExceptionFeed =>
+        ActivityFeed.Where(item => item.IsError);
+
     private string CurrentModelLabel =>
         Providers.FirstOrDefault(provider => provider.Id == SelectedProviderId)?.DisplayName ?? "None";
 
@@ -205,7 +211,10 @@ public partial class Home : IAsyncDisposable
                     envelope.Sequence,
                     title,
                     envelope.Message ?? string.Empty,
-                    envelope.Timestamp)
+                    envelope.Timestamp,
+                    envelope.Data?["severity"]?.GetValue<string?>() ?? "Information",
+                    envelope.Status,
+                    envelope.Data?["failureReason"]?.GetValue<string?>())
             ]);
 
         return InvokeAsync(StateHasChanged);
@@ -229,7 +238,14 @@ public partial class Home : IAsyncDisposable
     }
 
     private static ActivityViewModel ToViewModel(ActivityLogEntry entry) =>
-        new(entry.Sequence, entry.Title, entry.Message, entry.TimestampUtc);
+        new(
+            entry.Sequence,
+            entry.Title,
+            entry.Message,
+            entry.TimestampUtc,
+            entry.Severity.ToString(),
+            entry.Status.ToString(),
+            entry.Metadata?.TryGetValue("failureReason", out var failureReason) == true ? failureReason : null);
 
     private string ResolveAuthor(string authorId)
     {
@@ -263,5 +279,15 @@ public partial class Home : IAsyncDisposable
         _objectReference?.Dispose();
     }
 
-    private sealed record ActivityViewModel(long Sequence, string Title, string Message, DateTimeOffset Timestamp);
+    private sealed record ActivityViewModel(
+        long Sequence,
+        string Title,
+        string Message,
+        DateTimeOffset Timestamp,
+        string Severity,
+        string? Status,
+        string? Details)
+    {
+        public bool IsError => string.Equals(Severity, "Error", StringComparison.OrdinalIgnoreCase);
+    }
 }

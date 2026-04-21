@@ -71,7 +71,9 @@ public sealed class SequentialCoordinatorOrchestrator : ICoordinatorOrchestrator
                     });
 
                 var executionResult = await _agentExecutor.ExecuteAsync(executionRequest, cancellationToken);
-                var content = executionResult.Output ?? executionResult.Summary ?? $"{agentDefinition.Name} completed.";
+                var content = executionResult.Status == AgentExecutionStatus.Failed
+                    ? $"{agentDefinition.Name} could not complete that step. Check the exceptions panel for details."
+                    : executionResult.Output ?? executionResult.Summary ?? $"{agentDefinition.Name} completed.";
                 var message = new ConversationMessage(
                     Guid.NewGuid().ToString("N"),
                     thread.ThreadId,
@@ -87,10 +89,13 @@ public sealed class SequentialCoordinatorOrchestrator : ICoordinatorOrchestrator
                     ActivityKind.AgentExecution,
                     executionResult.Status == AgentExecutionStatus.Failed ? ActivityStatus.Failed : ActivityStatus.Completed,
                     agentDefinition.Name,
-                    executionResult.Summary ?? content,
+                    executionResult.Status == AgentExecutionStatus.Failed
+                        ? executionResult.FailureReason ?? executionResult.Summary ?? content
+                        : executionResult.Summary ?? content,
                     thread.ThreadId,
                     cancellationToken,
-                    agentDefinition.Id);
+                    agentDefinition.Id,
+                    executionResult.FailureReason);
             }
 
             if (roundMessages.Count > 0)
@@ -128,7 +133,8 @@ public sealed class SequentialCoordinatorOrchestrator : ICoordinatorOrchestrator
         string message,
         string threadId,
         CancellationToken cancellationToken,
-        string? agentId = null)
+        string? agentId = null,
+        string? failureReason = null)
     {
         return _activitySink.PublishAsync(
             new ActivityStreamEnvelope(
@@ -142,7 +148,13 @@ public sealed class SequentialCoordinatorOrchestrator : ICoordinatorOrchestrator
                     message,
                     DateTimeOffset.UtcNow,
                     ConversationId: threadId,
-                    AgentId: agentId)),
+                    AgentId: agentId,
+                    Metadata: string.IsNullOrWhiteSpace(failureReason)
+                        ? null
+                        : new Dictionary<string, string>
+                        {
+                            ["failureReason"] = failureReason
+                        })),
             cancellationToken);
     }
 }

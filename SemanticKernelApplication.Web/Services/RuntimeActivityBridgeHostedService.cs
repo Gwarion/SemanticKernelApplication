@@ -36,13 +36,25 @@ public sealed class RuntimeActivityBridgeHostedService : BackgroundService
 
     private static JsonObject BuildData(ActivityLogEntry entry)
     {
-        return new JsonObject
+        var data = new JsonObject
         {
             ["title"] = entry.Title,
             ["severity"] = entry.Severity.ToString(),
+            ["activityKind"] = entry.Kind.ToString(),
+            ["agentId"] = entry.AgentId,
             ["conversationId"] = entry.ConversationId,
             ["turnId"] = entry.TurnId,
             ["delta"] = entry.Delta
         };
+
+        if (entry.Metadata is not null)
+        {
+            foreach (var pair in entry.Metadata)
+            {
+                data[pair.Key] = pair.Value;
+            }
+        }
+
+        return data;
     }
 }
