@@ -421,3 +421,4 @@ FodyWeavers.xsd
 .appdata/
 .dotnet-home/
 .nuget/
+.tmp-sdk-check/

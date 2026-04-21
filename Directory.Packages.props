@@ -1,0 +1,13 @@
+<Project>
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageVersion Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="10.0.0" />
+    <PackageVersion Include="Microsoft.SemanticKernel" Version="1.74.0" />
+    <PackageVersion Include="Microsoft.SemanticKernel.Connectors.Google" Version="1.74.0-alpha" />
+    <PackageVersion Include="Microsoft.SemanticKernel.Connectors.MistralAI" Version="1.74.0-alpha" />
+    <PackageVersion Include="Microsoft.SemanticKernel.Connectors.OpenAI" Version="1.74.0" />
+  </ItemGroup>
+</Project>

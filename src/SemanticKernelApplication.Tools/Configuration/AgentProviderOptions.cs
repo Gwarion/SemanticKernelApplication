@@ -17,8 +17,6 @@ public sealed class AgentProviderRegistration
 
     public string ModelId { get; set; } = string.Empty;
 
-    public string? ApiKey { get; set; }
-
     public string? Endpoint { get; set; }
 
     public string? Deployment { get; set; }

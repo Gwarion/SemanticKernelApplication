@@ -2,6 +2,10 @@
     color-scheme: light;
     --page-bg: radial-gradient(circle at top, #eef7f3 0%, #f8fbfd 45%, #eef3f8 100%);
     --text-main: #13202b;
+    --text-muted: #52616d;
+    --border-soft: rgba(76, 93, 107, 0.12);
+    --panel-bg: rgba(255, 255, 255, 0.9);
+    --panel-shadow: 0 18px 60px rgba(24, 39, 53, 0.08);
 }
 
 html,
@@ -18,12 +22,20 @@ a {
 }
 
 button,
+input,
 textarea,
 select {
     font: inherit;
 }
 
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+}
+
 textarea,
+input,
 select {
     box-sizing: border-box;
 }
@@ -51,4 +63,42 @@ h3:focus {
     cursor: pointer;
     position: absolute;
     right: 1rem;
+}
+
+.status-page {
+    display: grid;
+    gap: 1rem;
+    max-width: 42rem;
+    padding: 2rem;
+    background: var(--panel-bg);
+    border: 1px solid var(--border-soft);
+    border-radius: 1.5rem;
+    box-shadow: var(--panel-shadow);
+}
+
+.status-page h1,
+.status-page h2 {
+    margin: 0;
+}
+
+.status-eyebrow {
+    margin: 0;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    font-size: 0.72rem;
+    color: #7c8a96;
+}
+
+.status-copy,
+.status-note p {
+    margin: 0;
+    color: var(--text-muted);
+}
+
+.status-note {
+    display: grid;
+    gap: 0.75rem;
+    padding: 1rem 1.1rem;
+    border-radius: 1rem;
+    background: #f3f7f8;
 }

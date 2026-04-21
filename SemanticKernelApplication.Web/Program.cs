@@ -19,7 +19,7 @@ builder.Services.AddDataProtection()
     .PersistKeysToFileSystem(new DirectoryInfo(dataProtectionDirectory));
 builder.Services.AddActivityStreaming();
 builder.Services.AddWorkspaceTools(builder.Configuration);
-builder.Services.AddAgentWorkbenchRuntime(builder.Configuration);
+builder.Services.AddAgentWorkbenchRuntime();
 builder.Services.AddHostedService<RuntimeActivityBridgeHostedService>();
 
 var app = builder.Build();
