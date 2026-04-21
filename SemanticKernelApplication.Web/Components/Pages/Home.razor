@@ -1,0 +1,318 @@
+@page "/"
+@rendermode InteractiveServer
+@implements IAsyncDisposable
+@inject IAgentWorkbenchService Workbench
+@inject IJSRuntime JS
+
+<PageTitle>Agent Workbench</PageTitle>
+
+<div class="workbench">
+    <section class="hero-card">
+        <div>
+            <p class="eyebrow">Coordinator-driven agent studio</p>
+            <h2>Describe agents in plain language, coordinate them from one chat, and watch public runtime activity stream back live.</h2>
+        </div>
+
+        <div class="hero-stats">
+            <article>
+                <span>@Agents.Count</span>
+                <small>Agents</small>
+            </article>
+            <article>
+                <span>@Providers.Count</span>
+                <small>Providers</small>
+            </article>
+            <article>
+                <span>@ActivityFeed.Count</span>
+                <small>Live events</small>
+            </article>
+        </div>
+    </section>
+
+    <section class="workbench-grid">
+        <div class="panel chat-panel">
+            <div class="panel-header">
+                <div>
+                    <p class="panel-label">Coordinator chat</p>
+                    <h3>One conversation thread for the whole bench</h3>
+                </div>
+            </div>
+
+            <div class="conversation">
+                @if (Messages.Count == 0)
+                {
+                    <div class="empty-state">
+                        <strong>No conversation yet</strong>
+                        <p>Create an agent from plain text, then send the coordinator a goal.</p>
+                    </div>
+                }
+                else
+                {
+                    @foreach (var message in Messages)
+                    {
+                        var isUser = message.AuthorId == "user";
+                        <article class="@(isUser ? "message message-user" : "message")">
+                            <div class="message-meta">
+                                <strong>@ResolveAuthor(message.AuthorId)</strong>
+                                <span>@message.CreatedAtUtc.ToLocalTime().ToString("HH:mm:ss")</span>
+                            </div>
+                            <p>@message.Content</p>
+                        </article>
+                    }
+                }
+            </div>
+
+            <div class="composer">
+                <label for="chat-message">Brief the coordinator</label>
+                <textarea id="chat-message" rows="5" @bind="ChatMessage" placeholder="Example: Compare the current agents, pick the best one for repository onboarding, and summarize the next steps."></textarea>
+                <div class="composer-actions">
+                    <span>@(IsBusy ? "Coordinator is working..." : "Ready")</span>
+                    <button class="primary-button" @onclick="SendAsync" disabled="@IsBusy">Send</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="panel output-panel">
+            <div class="panel-header">
+                <div>
+                    <p class="panel-label">Live output</p>
+                    <h3>Safe runtime activity summaries</h3>
+                </div>
+            </div>
+
+            <div class="activity-stream">
+                @if (ActivityFeed.Count == 0)
+                {
+                    <div class="empty-state">
+                        <strong>No activity yet</strong>
+                        <p>Runtime events will appear here as the coordinator receives work and agents respond.</p>
+                    </div>
+                }
+                else
+                {
+                    @foreach (var entry in ActivityFeed)
+                    {
+                        <article class="activity-entry">
+                            <div class="activity-header">
+                                <strong>@entry.Title</strong>
+                                <span>@entry.Timestamp.ToLocalTime().ToString("HH:mm:ss")</span>
+                            </div>
+                            <p>@entry.Message</p>
+                        </article>
+                    }
+                }
+            </div>
+        </div>
+
+        <div class="panel studio-panel">
+            <div class="panel-header">
+                <div>
+                    <p class="panel-label">Agent studio</p>
+                    <h3>Plain text becomes a typed backend agent</h3>
+                </div>
+            </div>
+
+            <div class="studio-form">
+                <label for="agent-description">Describe the agent you want</label>
+                <textarea id="agent-description" rows="6" @bind="AgentDescription" placeholder="Example: A backend .NET specialist that reviews API boundaries, dependency injection, and asynchronous workflows before code ships."></textarea>
+
+                <label for="provider-select">Preferred provider</label>
+                <select id="provider-select" @bind="SelectedProviderId">
+                    @foreach (var provider in Providers)
+                    {
+                        <option value="@provider.Id">@provider.DisplayName (@provider.Kind)</option>
+                    }
+                </select>
+
+                <button class="primary-button" @onclick="CreateAgentAsync" disabled="@IsBusy">Create agent</button>
+            </div>
+
+            <div class="agent-list">
+                @if (Agents.Count == 0)
+                {
+                    <div class="empty-state">
+                        <strong>No agents created yet</strong>
+                        <p>The final app stays generic: you define the specialists from this panel.</p>
+                    </div>
+                }
+                else
+                {
+                    @foreach (var agent in Agents)
+                    {
+                        <article class="agent-card">
+                            <div class="agent-topline">
+                                <strong>@agent.Name</strong>
+                                <span>@(agent.ProviderId ?? "demo")</span>
+                            </div>
+                            <p class="agent-role">@agent.Description</p>
+                            <p class="agent-prompt">@agent.Instructions.SystemPrompt</p>
+                        </article>
+                    }
+                }
+            </div>
+        </div>
+    </section>
+</div>
+
+@code {
+    private readonly List<ActivityViewModel> ActivityFeed = [];
+    private List<AgentDefinition> Agents { get; set; } = [];
+    private List<ModelProviderDefinition> Providers { get; set; } = [];
+    private List<ConversationMessage> Messages { get; set; } = [];
+    private string ChatMessage { get; set; } = string.Empty;
+    private string AgentDescription { get; set; } = string.Empty;
+    private string? ActiveConversationId { get; set; }
+    private string? SelectedProviderId { get; set; }
+    private bool IsBusy { get; set; }
+
+    private IJSObjectReference? _module;
+    private IJSObjectReference? _subscription;
+    private DotNetObjectReference<Home>? _objectReference;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await RefreshSnapshotAsync();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+        {
+            return;
+        }
+
+        _module = await JS.InvokeAsync<IJSObjectReference>("import", "./js/activity-stream.js");
+        _objectReference = DotNetObjectReference.Create(this);
+        _subscription = await _module.InvokeAsync<IJSObjectReference>("startActivityStream", _objectReference, "/api/activity/stream?replay=30");
+    }
+
+    private async Task RefreshSnapshotAsync()
+    {
+        var snapshot = await Workbench.GetSnapshotAsync();
+        Agents = snapshot.Agents.ToList();
+        Providers = snapshot.Providers.ToList();
+        Messages = snapshot.ActiveConversation?.Messages.OrderBy(message => message.CreatedAtUtc).ToList() ?? [];
+        ActiveConversationId = snapshot.ActiveConversation?.ThreadId;
+        SelectedProviderId ??= Providers.FirstOrDefault(provider => provider.IsDefault)?.Id ?? Providers.FirstOrDefault()?.Id;
+        MergeActivity(snapshot.RecentActivity.Select(ToViewModel));
+    }
+
+    private async Task CreateAgentAsync()
+    {
+        if (string.IsNullOrWhiteSpace(AgentDescription))
+        {
+            return;
+        }
+
+        IsBusy = true;
+        try
+        {
+            await Workbench.CreateAgentFromTextAsync(new PlainTextAgentCreationRequest(AgentDescription.Trim(), SelectedProviderId));
+            AgentDescription = string.Empty;
+            await RefreshSnapshotAsync();
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    private async Task SendAsync()
+    {
+        if (string.IsNullOrWhiteSpace(ChatMessage))
+        {
+            return;
+        }
+
+        IsBusy = true;
+        try
+        {
+            var response = await Workbench.SendCoordinatorMessageAsync(new CoordinatorChatRequest(ChatMessage.Trim(), ActiveConversationId));
+            ActiveConversationId = response.ConversationId;
+            Messages = response.Result.Thread.Messages.OrderBy(message => message.CreatedAtUtc).ToList();
+            MergeActivity(response.Activity.Select(ToViewModel));
+            ChatMessage = string.Empty;
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    [JSInvokable]
+    public Task OnActivityEvent(ActivityEventEnvelope envelope)
+    {
+        var title = envelope.Data?["title"]?.GetValue<string?>()
+            ?? envelope.Source
+            ?? envelope.Type;
+
+        MergeActivity([
+            new ActivityViewModel(
+                envelope.Sequence,
+                title,
+                envelope.Message ?? string.Empty,
+                envelope.Timestamp)
+        ]);
+
+        return InvokeAsync(StateHasChanged);
+    }
+
+    private void MergeActivity(IEnumerable<ActivityViewModel> events)
+    {
+        foreach (var item in events.OrderBy(item => item.Sequence))
+        {
+            if (ActivityFeed.All(existing => existing.Sequence != item.Sequence))
+            {
+                ActivityFeed.Add(item);
+            }
+        }
+
+        ActivityFeed.Sort((left, right) => right.Sequence.CompareTo(left.Sequence));
+        if (ActivityFeed.Count > 80)
+        {
+            ActivityFeed.RemoveRange(80, ActivityFeed.Count - 80);
+        }
+    }
+
+    private static ActivityViewModel ToViewModel(ActivityLogEntry entry) =>
+        new(entry.Sequence, entry.Title, entry.Message, entry.TimestampUtc);
+
+    private string ResolveAuthor(string authorId)
+    {
+        if (authorId == "user")
+        {
+            return "You";
+        }
+
+        if (authorId == "coordinator")
+        {
+            return "Coordinator";
+        }
+
+        return Agents.FirstOrDefault(agent => agent.Id == authorId)?.Name ?? authorId;
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_subscription is not null)
+        {
+            try
+            {
+                await _subscription.InvokeVoidAsync("stop");
+                await _subscription.DisposeAsync();
+            }
+            catch
+            {
+            }
+        }
+
+        if (_module is not null)
+        {
+            await _module.DisposeAsync();
+        }
+
+        _objectReference?.Dispose();
+    }
+
+    private sealed record ActivityViewModel(long Sequence, string Title, string Message, DateTimeOffset Timestamp);
+}
