@@ -95,7 +95,8 @@ public sealed class SequentialCoordinatorOrchestrator : ICoordinatorOrchestrator
                     thread.ThreadId,
                     cancellationToken,
                     agentDefinition.Id,
-                    executionResult.FailureReason);
+                    executionResult.FailureReason,
+                    executionResult.Metadata);
             }
 
             if (roundMessages.Count > 0)
@@ -134,8 +135,29 @@ public sealed class SequentialCoordinatorOrchestrator : ICoordinatorOrchestrator
         string threadId,
         CancellationToken cancellationToken,
         string? agentId = null,
-        string? failureReason = null)
+        string? failureReason = null,
+        IReadOnlyDictionary<string, string>? metadata = null)
     {
+        Dictionary<string, string>? activityMetadata = null;
+
+        if (metadata is not null || !string.IsNullOrWhiteSpace(failureReason))
+        {
+            activityMetadata = new Dictionary<string, string>(StringComparer.Ordinal);
+
+            if (metadata is not null)
+            {
+                foreach (var pair in metadata)
+                {
+                    activityMetadata[pair.Key] = pair.Value;
+                }
+            }
+
+            if (!string.IsNullOrWhiteSpace(failureReason))
+            {
+                activityMetadata["failureReason"] = failureReason;
+            }
+        }
+
         return _activitySink.PublishAsync(
             new ActivityStreamEnvelope(
                 threadId,
@@ -149,12 +171,7 @@ public sealed class SequentialCoordinatorOrchestrator : ICoordinatorOrchestrator
                     DateTimeOffset.UtcNow,
                     ConversationId: threadId,
                     AgentId: agentId,
-                    Metadata: string.IsNullOrWhiteSpace(failureReason)
-                        ? null
-                        : new Dictionary<string, string>
-                        {
-                            ["failureReason"] = failureReason
-                        })),
+                    Metadata: activityMetadata)),
             cancellationToken);
     }
 }

@@ -27,6 +27,7 @@ public partial class Home : IAsyncDisposable
     private string SetupFeedback { get; set; } = string.Empty;
     private string? ActiveConversationId { get; set; }
     private string? SelectedProviderId { get; set; }
+    private string? SelectedModelId { get; set; }
     private bool ApiKeyConfigured { get; set; }
     private bool IsBusy { get; set; }
     private bool IsWorkspaceBusy { get; set; }
@@ -43,7 +44,8 @@ public partial class Home : IAsyncDisposable
 
     private bool CanApplyModel =>
         !IsModelBusy
-        && !string.IsNullOrWhiteSpace(SelectedProviderId);
+        && !string.IsNullOrWhiteSpace(SelectedProviderId)
+        && !string.IsNullOrWhiteSpace(SelectedModelId);
 
     private IEnumerable<string> WorkspaceSuggestions =>
         new[] { ActiveWorkspacePath, WorkspacePathInput }
@@ -58,7 +60,15 @@ public partial class Home : IAsyncDisposable
         ActivityFeed.Where(item => item.IsError);
 
     private string CurrentModelLabel =>
-        Providers.FirstOrDefault(provider => provider.Id == SelectedProviderId)?.DisplayName ?? "None";
+        SelectedProvider is null
+            ? "None"
+            : $"{SelectedProvider.DisplayName} / {SelectedProvider.Models.FirstOrDefault(model => model.Id == SelectedModelId)?.DisplayName ?? SelectedModelId}";
+
+    private ModelProviderDefinition? SelectedProvider =>
+        Providers.FirstOrDefault(provider => provider.Id == SelectedProviderId);
+
+    private IReadOnlyList<ModelDefinition> AvailableModels =>
+        SelectedProvider?.Models ?? [];
 
     protected override async Task OnInitializedAsync()
     {
@@ -90,7 +100,9 @@ public partial class Home : IAsyncDisposable
             ? snapshot.WorkspacePath
             : WorkspacePathInput;
         SelectedProviderId = snapshot.ModelConfiguration.SelectedProviderId;
+        SelectedModelId = snapshot.ModelConfiguration.SelectedModelId;
         ApiKeyConfigured = snapshot.ModelConfiguration.ApiKeyConfigured;
+        ApiKeyInput = snapshot.ModelConfiguration.ApiKey ?? string.Empty;
         Messages = snapshot.ActiveConversation?.Messages.OrderBy(message => message.CreatedAtUtc).ToList() ?? [];
         ActiveConversationId = snapshot.ActiveConversation?.ThreadId;
         MergeActivity(snapshot.RecentActivity.Select(ToViewModel));
@@ -136,10 +148,12 @@ public partial class Home : IAsyncDisposable
         try
         {
             var configuration = await Workbench.SetGlobalModelConfigurationAsync(
-                new GlobalModelConfigurationRequest(SelectedProviderId!, ApiKeyInput));
+                new GlobalModelConfigurationRequest(SelectedProviderId!, SelectedModelId!, ApiKeyInput));
             SelectedProviderId = configuration.SelectedProviderId;
+            SelectedModelId = configuration.SelectedModelId;
             ApiKeyConfigured = configuration.ApiKeyConfigured;
-            SetupFeedback = "Global model settings updated for this app session.";
+            ApiKeyInput = configuration.ApiKey ?? string.Empty;
+            SetupFeedback = "Global model settings were saved locally for the next app launch.";
             await RefreshSnapshotAsync();
         }
         catch (Exception ex)
@@ -214,10 +228,26 @@ public partial class Home : IAsyncDisposable
                     envelope.Timestamp,
                     envelope.Data?["severity"]?.GetValue<string?>() ?? "Information",
                     envelope.Status,
-                    envelope.Data?["failureReason"]?.GetValue<string?>())
+                    envelope.Data?["failureReason"]?.GetValue<string?>(),
+                    envelope.Data?["providerId"]?.GetValue<string?>(),
+                    envelope.Data?["providerKind"]?.GetValue<string?>(),
+                    envelope.Data?["modelId"]?.GetValue<string?>(),
+                    envelope.Data?["exceptionType"]?.GetValue<string?>(),
+                    envelope.Data?["exceptionMessage"]?.GetValue<string?>(),
+                    envelope.Data?["exceptionDetails"]?.GetValue<string?>())
             ]);
 
         return InvokeAsync(StateHasChanged);
+    }
+
+    private void OnProviderChanged(ChangeEventArgs args)
+    {
+        SelectedProviderId = args.Value?.ToString();
+        SelectedModelId = Providers
+            .FirstOrDefault(provider => provider.Id == SelectedProviderId)?
+            .Models
+            .FirstOrDefault(model => model.IsDefault)?.Id
+            ?? Providers.FirstOrDefault(provider => provider.Id == SelectedProviderId)?.Models.FirstOrDefault()?.Id;
     }
 
     private void MergeActivity(IEnumerable<ActivityViewModel> events)
@@ -245,7 +275,13 @@ public partial class Home : IAsyncDisposable
             entry.TimestampUtc,
             entry.Severity.ToString(),
             entry.Status.ToString(),
-            entry.Metadata?.TryGetValue("failureReason", out var failureReason) == true ? failureReason : null);
+            entry.Metadata?.TryGetValue("failureReason", out var failureReason) == true ? failureReason : null,
+            entry.Metadata?.TryGetValue("providerId", out var providerId) == true ? providerId : null,
+            entry.Metadata?.TryGetValue("providerKind", out var providerKind) == true ? providerKind : null,
+            entry.Metadata?.TryGetValue("modelId", out var modelId) == true ? modelId : null,
+            entry.Metadata?.TryGetValue("exceptionType", out var exceptionType) == true ? exceptionType : null,
+            entry.Metadata?.TryGetValue("exceptionMessage", out var exceptionMessage) == true ? exceptionMessage : null,
+            entry.Metadata?.TryGetValue("exceptionDetails", out var exceptionDetails) == true ? exceptionDetails : null);
 
     private string ResolveAuthor(string authorId)
     {
@@ -286,7 +322,13 @@ public partial class Home : IAsyncDisposable
         DateTimeOffset Timestamp,
         string Severity,
         string? Status,
-        string? Details)
+        string? Details,
+        string? ProviderId,
+        string? ProviderKind,
+        string? ModelId,
+        string? ExceptionType,
+        string? ExceptionMessage,
+        string? ExceptionDetails)
     {
         public bool IsError => string.Equals(Severity, "Error", StringComparison.OrdinalIgnoreCase);
     }

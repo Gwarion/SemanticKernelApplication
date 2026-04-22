@@ -7,11 +7,13 @@ public interface IProviderSessionConfiguration
 {
     string? SelectedProviderId { get; }
 
+    string? SelectedModelId { get; }
+
     string? ApiKey { get; }
 
-    GlobalModelConfiguration GetConfiguration(IReadOnlyList<AgentProviderRegistration> providers);
+    GlobalModelConfiguration GetConfiguration();
 
-    GlobalModelConfiguration Update(GlobalModelConfigurationRequest request, IReadOnlyList<AgentProviderRegistration> providers);
+    GlobalModelConfiguration Update(GlobalModelConfigurationRequest request);
 
-    AgentProviderRegistration? ResolveSelectedProvider(IReadOnlyList<AgentProviderRegistration> providers);
+    AgentProviderRegistration? ResolveSelectedProvider();
 }

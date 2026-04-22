@@ -18,10 +18,13 @@ public sealed record WorkspaceSelectionRequest(string WorkspacePath);
 
 public sealed record GlobalModelConfiguration(
     string SelectedProviderId,
-    bool ApiKeyConfigured);
+    string SelectedModelId,
+    bool ApiKeyConfigured,
+    string? ApiKey = null);
 
 public sealed record GlobalModelConfigurationRequest(
     string SelectedProviderId,
+    string SelectedModelId,
     string? ApiKey = null);
 
 public sealed record CoordinatorChatResponse(

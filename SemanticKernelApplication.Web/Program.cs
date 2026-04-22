@@ -6,6 +6,7 @@ using SemanticKernelApplication.Web.Endpoints;
 using SemanticKernelApplication.Web.Services;
 
 var builder = WebApplication.CreateBuilder(args);
+Directory.CreateDirectory(Path.Combine(builder.Environment.ContentRootPath, "..", ".appdata"));
 var dataProtectionDirectory = Path.Combine(builder.Environment.ContentRootPath, "..", ".appdata", "DataProtectionKeys");
 Directory.CreateDirectory(dataProtectionDirectory);
 builder.Logging.ClearProviders();

@@ -3,10 +3,8 @@ using SemanticKernelApplication.Abstractions.Agents;
 using SemanticKernelApplication.Abstractions.Workbench;
 using SemanticKernelApplication.Runtime.Services.Agents;
 using SemanticKernelApplication.Runtime.Services.Workbench;
-using SemanticKernelApplication.Tools.Configuration;
 using SemanticKernelApplication.Tools.Providers;
 using SemanticKernelApplication.Tools.Workspace;
-using Microsoft.Extensions.Options;
 
 namespace SemanticKernelApplication.Runtime.Services;
 
@@ -18,7 +16,6 @@ public sealed class AgentWorkbenchService : IAgentWorkbenchService
     private readonly IActivitySink _activitySink;
     private readonly IWorkspaceContext _workspaceContext;
     private readonly IProviderSessionConfiguration _providerSessionConfiguration;
-    private readonly AgentProviderOptions _providerOptions;
 
     public AgentWorkbenchService(
         IAgentCreationService agentCreationService,
@@ -26,8 +23,7 @@ public sealed class AgentWorkbenchService : IAgentWorkbenchService
         ICoordinatorChatService coordinatorChatService,
         IActivitySink activitySink,
         IWorkspaceContext workspaceContext,
-        IProviderSessionConfiguration providerSessionConfiguration,
-        IOptions<AgentProviderOptions> providerOptions)
+        IProviderSessionConfiguration providerSessionConfiguration)
     {
         _agentCreationService = agentCreationService;
         _snapshotFactory = snapshotFactory;
@@ -35,7 +31,6 @@ public sealed class AgentWorkbenchService : IAgentWorkbenchService
         _activitySink = activitySink;
         _workspaceContext = workspaceContext;
         _providerSessionConfiguration = providerSessionConfiguration;
-        _providerOptions = providerOptions.Value;
     }
 
     public Task<WorkbenchSnapshot> GetSnapshotAsync(CancellationToken cancellationToken = default) =>
@@ -78,7 +73,7 @@ public sealed class AgentWorkbenchService : IAgentWorkbenchService
         GlobalModelConfigurationRequest request,
         CancellationToken cancellationToken = default)
     {
-        var configuration = _providerSessionConfiguration.Update(request, _providerOptions.Providers);
+        var configuration = _providerSessionConfiguration.Update(request);
 
         await _activitySink.PublishAsync(
             new ActivityStreamEnvelope(
@@ -89,11 +84,12 @@ public sealed class AgentWorkbenchService : IAgentWorkbenchService
                     ActivityStatus.Completed,
                     ActivitySeverity.Information,
                     "Global model updated",
-                    $"The coordinator and all agents will now use {configuration.SelectedProviderId}.",
+                    $"The coordinator and all agents will now use {configuration.SelectedProviderId} / {configuration.SelectedModelId}.",
                     DateTimeOffset.UtcNow,
                     Metadata: new Dictionary<string, string>
                     {
                         ["providerId"] = configuration.SelectedProviderId,
+                        ["modelId"] = configuration.SelectedModelId,
                         ["apiKeyConfigured"] = configuration.ApiKeyConfigured.ToString()
                     })),
             cancellationToken);

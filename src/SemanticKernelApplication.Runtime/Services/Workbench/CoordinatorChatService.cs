@@ -4,9 +4,7 @@ using SemanticKernelApplication.Abstractions.Conversations;
 using SemanticKernelApplication.Abstractions.Orchestration;
 using SemanticKernelApplication.Abstractions.Workbench;
 using SemanticKernelApplication.Runtime.Services.Agents;
-using SemanticKernelApplication.Tools.Configuration;
 using SemanticKernelApplication.Tools.Providers;
-using Microsoft.Extensions.Options;
 
 namespace SemanticKernelApplication.Runtime.Services.Workbench;
 
@@ -21,7 +19,6 @@ public sealed class CoordinatorChatService : ICoordinatorChatService
     private readonly IActivitySink _activitySink;
     private readonly InMemoryActivityLog _activityLog;
     private readonly IProviderSessionConfiguration _providerSessionConfiguration;
-    private readonly AgentProviderOptions _providerOptions;
     private readonly IWorkbenchSnapshotFactory _snapshotFactory;
 
     public CoordinatorChatService(
@@ -32,7 +29,6 @@ public sealed class CoordinatorChatService : ICoordinatorChatService
         IActivitySink activitySink,
         InMemoryActivityLog activityLog,
         IProviderSessionConfiguration providerSessionConfiguration,
-        IOptions<AgentProviderOptions> providerOptions,
         IWorkbenchSnapshotFactory snapshotFactory)
     {
         _agentCreationService = agentCreationService;
@@ -42,7 +38,6 @@ public sealed class CoordinatorChatService : ICoordinatorChatService
         _activitySink = activitySink;
         _activityLog = activityLog;
         _providerSessionConfiguration = providerSessionConfiguration;
-        _providerOptions = providerOptions.Value;
         _snapshotFactory = snapshotFactory;
     }
 
@@ -76,10 +71,10 @@ public sealed class CoordinatorChatService : ICoordinatorChatService
         var agent = await _agentCreationService.CreateFromTextAsync(
             new PlainTextAgentCreationRequest(agentDescription),
             cancellationToken);
-        var providerId = _providerSessionConfiguration.GetConfiguration(_providerOptions.Providers).SelectedProviderId;
+        var configuration = _providerSessionConfiguration.GetConfiguration();
 
         var replyText =
-            $"I created {agent.Name} and added it to the agent studio. It will participate using the current global model setting ({providerId}).";
+            $"I created {agent.Name} and added it to the agent studio. It will participate using the current global model setting ({configuration.SelectedProviderId} / {configuration.SelectedModelId}).";
         var replyMessage = CreateMessage(thread.ThreadId, ConversationMessageRole.Assistant, CoordinatorId, replyText);
         var participantThread = EnsureAgentParticipant(thread, agent);
         var updatedThread = await SaveThreadAsync(participantThread, [userMessage, replyMessage], cancellationToken);

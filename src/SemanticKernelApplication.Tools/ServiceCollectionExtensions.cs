@@ -13,11 +13,12 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddWorkspaceTools(this IServiceCollection services, IConfiguration configuration)
     {
         services.Configure<WorkspaceToolOptions>(configuration.GetSection("WorkspaceTools"));
-        services.Configure<AgentProviderOptions>(configuration.GetSection("AgentProviders"));
+        services.Configure<LocalWorkbenchStoreOptions>(configuration.GetSection("LocalWorkbenchStore"));
 
         services.AddSingleton<FileSystemPlugin>();
         services.AddSingleton<ShellPlugin>();
         services.AddSingleton<GitPlugin>();
+        services.AddSingleton<ILocalWorkbenchConfigurationStore, LocalWorkbenchConfigurationStore>();
         services.AddSingleton<IWorkspaceContext, WorkspaceContext>();
         services.AddSingleton<IProviderSessionConfiguration, ProviderSessionConfiguration>();
         services.AddSingleton<IWorkspacePluginCatalog, WorkspacePluginCatalog>();

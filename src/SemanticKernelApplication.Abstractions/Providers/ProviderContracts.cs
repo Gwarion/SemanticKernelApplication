@@ -2,7 +2,6 @@ namespace SemanticKernelApplication.Abstractions.Providers;
 
 public enum AiProviderKind
 {
-    Demo,
     OpenAI,
     AzureOpenAI,
     OpenAICompatible,
@@ -11,11 +10,17 @@ public enum AiProviderKind
     Anthropic
 }
 
+public sealed record ModelDefinition(
+    string Id,
+    string DisplayName,
+    bool IsDefault = false);
+
 public sealed record ModelProviderDefinition(
     string Id,
     string DisplayName,
     AiProviderKind Kind,
-    string ModelId,
+    IReadOnlyList<ModelDefinition> Models,
+    string SelectedModelId,
     bool IsConfigured,
     bool IsDefault = false,
     IReadOnlyDictionary<string, string>? Metadata = null);

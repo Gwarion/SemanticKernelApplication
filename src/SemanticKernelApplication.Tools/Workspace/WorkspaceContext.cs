@@ -1,52 +1,17 @@
-using Microsoft.Extensions.Options;
 using SemanticKernelApplication.Tools.Configuration;
 
 namespace SemanticKernelApplication.Tools.Workspace;
 
 public sealed class WorkspaceContext : IWorkspaceContext
 {
-    private readonly Lock _lock = new();
-    private string _currentRootPath;
+    private readonly ILocalWorkbenchConfigurationStore _configurationStore;
 
-    public WorkspaceContext(IOptions<WorkspaceToolOptions> options)
+    public WorkspaceContext(ILocalWorkbenchConfigurationStore configurationStore)
     {
-        _currentRootPath = NormalizeAndValidate(options.Value.RootPath);
+        _configurationStore = configurationStore;
     }
 
-    public string CurrentRootPath
-    {
-        get
-        {
-            lock (_lock)
-            {
-                return _currentRootPath;
-            }
-        }
-    }
+    public string CurrentRootPath => _configurationStore.GetWorkspacePath();
 
-    public string SetRootPath(string workspacePath)
-    {
-        var normalized = NormalizeAndValidate(workspacePath);
-
-        lock (_lock)
-        {
-            _currentRootPath = normalized;
-            return _currentRootPath;
-        }
-    }
-
-    private static string NormalizeAndValidate(string workspacePath)
-    {
-        var candidate = string.IsNullOrWhiteSpace(workspacePath)
-            ? Environment.CurrentDirectory
-            : workspacePath.Trim();
-
-        var fullPath = Path.GetFullPath(candidate);
-        if (!Directory.Exists(fullPath))
-        {
-            throw new DirectoryNotFoundException($"Workspace folder '{fullPath}' does not exist.");
-        }
-
-        return fullPath;
-    }
+    public string SetRootPath(string workspacePath) => _configurationStore.SetWorkspacePath(workspacePath);
 }

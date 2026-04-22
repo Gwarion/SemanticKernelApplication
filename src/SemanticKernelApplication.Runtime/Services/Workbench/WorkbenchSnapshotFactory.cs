@@ -2,10 +2,8 @@ using SemanticKernelApplication.Abstractions.Activities;
 using SemanticKernelApplication.Abstractions.Agents;
 using SemanticKernelApplication.Abstractions.Conversations;
 using SemanticKernelApplication.Abstractions.Workbench;
-using SemanticKernelApplication.Tools.Configuration;
 using SemanticKernelApplication.Tools.Providers;
 using SemanticKernelApplication.Tools.Workspace;
-using Microsoft.Extensions.Options;
 
 namespace SemanticKernelApplication.Runtime.Services.Workbench;
 
@@ -17,7 +15,6 @@ public sealed class WorkbenchSnapshotFactory : IWorkbenchSnapshotFactory
     private readonly InMemoryActivityLog _activityLog;
     private readonly IWorkspaceContext _workspaceContext;
     private readonly IProviderSessionConfiguration _providerSessionConfiguration;
-    private readonly AgentProviderOptions _providerOptions;
     private string? _activeConversationId;
 
     public WorkbenchSnapshotFactory(
@@ -26,8 +23,7 @@ public sealed class WorkbenchSnapshotFactory : IWorkbenchSnapshotFactory
         IAiProviderCatalog providerCatalog,
         InMemoryActivityLog activityLog,
         IWorkspaceContext workspaceContext,
-        IProviderSessionConfiguration providerSessionConfiguration,
-        IOptions<AgentProviderOptions> providerOptions)
+        IProviderSessionConfiguration providerSessionConfiguration)
     {
         _agentDefinitionStore = agentDefinitionStore;
         _conversationStore = conversationStore;
@@ -35,7 +31,6 @@ public sealed class WorkbenchSnapshotFactory : IWorkbenchSnapshotFactory
         _activityLog = activityLog;
         _workspaceContext = workspaceContext;
         _providerSessionConfiguration = providerSessionConfiguration;
-        _providerOptions = providerOptions.Value;
     }
 
     public async Task<WorkbenchSnapshot> CreateAsync(CancellationToken cancellationToken = default)
@@ -48,7 +43,7 @@ public sealed class WorkbenchSnapshotFactory : IWorkbenchSnapshotFactory
         return new WorkbenchSnapshot(
             agents,
             _providerCatalog.GetProviders(),
-            _providerSessionConfiguration.GetConfiguration(_providerOptions.Providers),
+            _providerSessionConfiguration.GetConfiguration(),
             _workspaceContext.CurrentRootPath,
             conversation,
             _activityLog.GetRecent(80));

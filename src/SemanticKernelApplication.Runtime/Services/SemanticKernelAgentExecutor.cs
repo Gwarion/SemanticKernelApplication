@@ -1,32 +1,27 @@
 using Microsoft.SemanticKernel;
 using Microsoft.SemanticKernel.ChatCompletion;
 using Microsoft.SemanticKernel.Connectors.Google;
-using Microsoft.SemanticKernel.Connectors.MistralAI;
 using Microsoft.SemanticKernel.Connectors.OpenAI;
 using SemanticKernelApplication.Abstractions.Agents;
 using SemanticKernelApplication.Abstractions.Providers;
 using SemanticKernelApplication.Tools.Configuration;
 using SemanticKernelApplication.Tools.Kernel;
 using SemanticKernelApplication.Tools.Providers;
-using Microsoft.Extensions.Options;
 
 namespace SemanticKernelApplication.Runtime.Services;
 
 public sealed class SemanticKernelAgentExecutor : IAgentExecutor
 {
     private readonly IAiProviderCatalog _providerCatalog;
-    private readonly AgentProviderOptions _providerOptions;
     private readonly IWorkspacePluginCatalog _pluginCatalog;
     private readonly IProviderSessionConfiguration _providerSessionConfiguration;
 
     public SemanticKernelAgentExecutor(
         IAiProviderCatalog providerCatalog,
-        IOptions<AgentProviderOptions> providerOptions,
         IWorkspacePluginCatalog pluginCatalog,
         IProviderSessionConfiguration providerSessionConfiguration)
     {
         _providerCatalog = providerCatalog;
-        _providerOptions = providerOptions.Value;
         _pluginCatalog = pluginCatalog;
         _providerSessionConfiguration = providerSessionConfiguration;
     }
@@ -40,14 +35,15 @@ public sealed class SemanticKernelAgentExecutor : IAgentExecutor
         var startedAt = DateTimeOffset.UtcNow;
         var provider = _providerCatalog.GetProvider(null);
 
-        if (provider is null || provider.Kind == AiProviderKind.Demo || !provider.IsConfigured)
+        if (provider is null || !provider.IsConfigured)
         {
             return BuildFallbackResult(request, startedAt, provider);
         }
 
+        AgentProviderRegistration? registration = null;
         try
         {
-            var registration = _providerSessionConfiguration.ResolveSelectedProvider(_providerOptions.Providers);
+            registration = _providerCatalog.GetRegistration(null);
             if (registration is null)
             {
                 return BuildFallbackResult(request, startedAt, provider);
@@ -83,10 +79,21 @@ public sealed class SemanticKernelAgentExecutor : IAgentExecutor
         }
         catch (Exception exception)
         {
+            var failureDetails = new Dictionary<string, string>
+            {
+                ["providerId"] = registration?.Id ?? provider?.Id ?? "unknown",
+                ["providerKind"] = (registration?.Kind ?? provider?.Kind)?.ToString() ?? "unknown",
+                ["modelId"] = _providerSessionConfiguration.SelectedModelId ?? provider?.SelectedModelId ?? "unknown",
+                ["exceptionType"] = exception.GetType().FullName ?? exception.GetType().Name,
+                ["exceptionMessage"] = exception.Message,
+                ["exceptionDetails"] = exception.ToString()
+            };
+
             return new AgentExecutionResult(
                 request.OperationId,
                 AgentExecutionStatus.Failed,
                 Summary: $"Execution failed for {request.Agent.DisplayName}",
+                Metadata: failureDetails,
                 StartedAtUtc: startedAt,
                 CompletedAtUtc: DateTimeOffset.UtcNow,
                 FailureReason: $"{exception.GetType().Name}: {exception.Message}");
@@ -105,10 +112,6 @@ public sealed class SemanticKernelAgentExecutor : IAgentExecutor
             {
                 ToolCallBehavior = GeminiToolCallBehavior.AutoInvokeKernelFunctions
             },
-            AiProviderKind.Mistral => new MistralAIPromptExecutionSettings
-            {
-                ToolCallBehavior = MistralAIToolCallBehavior.AutoInvokeKernelFunctions
-            },
             _ => null
         };
     }
@@ -116,23 +119,23 @@ public sealed class SemanticKernelAgentExecutor : IAgentExecutor
     private Kernel BuildKernel(AgentProviderRegistration provider)
     {
         var builder = Kernel.CreateBuilder();
+        var modelId = _providerSessionConfiguration.SelectedModelId
+            ?? provider.Models.FirstOrDefault(model => model.IsDefault)?.Id
+            ?? provider.Models.First().Id;
 
         switch (provider.Kind)
         {
             case AiProviderKind.OpenAI:
-                builder.AddOpenAIChatCompletion(provider.ModelId, _providerSessionConfiguration.ApiKey!);
+                builder.AddOpenAIChatCompletion(modelId, _providerSessionConfiguration.ApiKey!);
                 break;
             case AiProviderKind.OpenAICompatible:
-                builder.AddOpenAIChatCompletion(provider.ModelId, new Uri(provider.Endpoint!), _providerSessionConfiguration.ApiKey!, provider.OrganizationId, serviceId: provider.Id);
+                builder.AddOpenAIChatCompletion(modelId, new Uri(provider.Endpoint!), _providerSessionConfiguration.ApiKey!, provider.OrganizationId, serviceId: provider.Id);
                 break;
             case AiProviderKind.GoogleGemini:
-                builder.AddGoogleAIGeminiChatCompletion(provider.ModelId, _providerSessionConfiguration.ApiKey!, serviceId: provider.Id);
-                break;
-            case AiProviderKind.Mistral:
-                builder.AddMistralChatCompletion(provider.ModelId, _providerSessionConfiguration.ApiKey!, endpoint: string.IsNullOrWhiteSpace(provider.Endpoint) ? null : new Uri(provider.Endpoint), serviceId: provider.Id);
+                builder.AddGoogleAIGeminiChatCompletion(modelId, _providerSessionConfiguration.ApiKey!, serviceId: provider.Id);
                 break;
             case AiProviderKind.Anthropic:
-                throw new InvalidOperationException("Anthropic is configured in the provider catalog, but this starter does not yet include a first-party Semantic Kernel Anthropic connector.");
+                throw new InvalidOperationException("Claude is configured in the local catalog, but this build does not yet include the Semantic Kernel Anthropic connector package.");
             case AiProviderKind.AzureOpenAI:
                 throw new InvalidOperationException("Azure OpenAI is not wired in this starter. Add the Azure OpenAI connector package and endpoint mapping to enable it.");
             default:
@@ -148,7 +151,7 @@ public sealed class SemanticKernelAgentExecutor : IAgentExecutor
         ModelProviderDefinition? provider)
     {
         var summary = provider is null
-            ? "No AI provider is configured, so the runtime used the built-in fallback coordinator summary."
+            ? "No configured model is available, so the runtime used the built-in fallback coordinator summary."
             : $"Provider '{provider.DisplayName}' is unavailable in this environment, so the runtime used the built-in fallback summary.";
 
         var output = $$"""

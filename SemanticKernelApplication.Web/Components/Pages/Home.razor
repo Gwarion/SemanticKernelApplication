@@ -17,11 +17,11 @@
             </article>
             <article>
                 <span>@Providers.Count</span>
-                <small>Models</small>
+                <small>Providers</small>
             </article>
             <article>
-                <span>@ActivityFeed.Count</span>
-                <small>Live events</small>
+                <span>@Providers.SelectMany(provider => provider.Models).Count()</span>
+                <small>Models</small>
             </article>
         </div>
     </section>
@@ -29,8 +29,8 @@
     <section class="setup-card">
         <div class="setup-copy">
             <p class="panel-label">Setup</p>
-            <h3>Choose one global model and one constrained workspace for the whole bench.</h3>
-            <p>API keys stay in memory for this app session and are not stored in the repo config.</p>
+            <h3>Pick one workspace, one provider, one model, and keep the last-used config locally.</h3>
+            <p>The app now reloads the last saved workspace, provider, model, and API key from a local database on startup.</p>
         </div>
 
         <div class="setup-grid">
@@ -56,9 +56,9 @@
             </div>
 
             <div class="setup-field">
-                <label for="global-provider">Global model</label>
+                <label for="global-provider">Provider</label>
                 <div class="setup-row">
-                    <select id="global-provider" @bind="SelectedProviderId">
+                    <select id="global-provider" value="@SelectedProviderId" @onchange="OnProviderChanged">
                         @foreach (var provider in Providers)
                         {
                             <option value="@provider.Id">@provider.DisplayName (@provider.Kind)</option>
@@ -68,17 +68,28 @@
                         @(IsModelBusy ? "Updating..." : "Apply")
                     </button>
                 </div>
-                <small>Current: @CurrentModelLabel</small>
+                <small>Current provider: @(SelectedProvider?.DisplayName ?? "None")</small>
             </div>
 
             <div class="setup-field">
-                <label for="api-key">API key for the selected model</label>
+                <label for="global-model">Model</label>
+                <select id="global-model" @bind="SelectedModelId">
+                    @foreach (var model in AvailableModels)
+                    {
+                        <option value="@model.Id">@model.DisplayName</option>
+                    }
+                </select>
+                <small>Current model: @CurrentModelLabel</small>
+            </div>
+
+            <div class="setup-field">
+                <label for="api-key">API key for the selected provider</label>
                 <input id="api-key"
                        type="password"
                        @bind="ApiKeyInput"
                        @bind:event="oninput"
                        placeholder="Paste a key for the selected provider" />
-                <small>@(ApiKeyConfigured ? "A session key is loaded for the current model." : "No session key loaded for the current model.")</small>
+                <small>@(ApiKeyConfigured ? "A saved key is loaded for the current provider." : "No saved key is loaded for the current provider.")</small>
             </div>
         </div>
 
@@ -189,9 +200,27 @@
                                 <span>@entry.Timestamp.ToLocalTime().ToString("HH:mm:ss")</span>
                             </div>
                             <p>@entry.Message</p>
+                            @if (!string.IsNullOrWhiteSpace(entry.ProviderId) || !string.IsNullOrWhiteSpace(entry.ModelId))
+                            {
+                                <p class="activity-meta">
+                                    Provider: @entry.ProviderId (@entry.ProviderKind)
+                                    @if (!string.IsNullOrWhiteSpace(entry.ModelId))
+                                    {
+                                        <span> | Model: @entry.ModelId</span>
+                                    }
+                                </p>
+                            }
+                            @if (!string.IsNullOrWhiteSpace(entry.ExceptionType) || !string.IsNullOrWhiteSpace(entry.ExceptionMessage))
+                            {
+                                <p class="activity-detail">@entry.ExceptionType: @entry.ExceptionMessage</p>
+                            }
                             @if (!string.IsNullOrWhiteSpace(entry.Details))
                             {
                                 <p class="activity-detail">@entry.Details</p>
+                            }
+                            @if (!string.IsNullOrWhiteSpace(entry.ExceptionDetails))
+                            {
+                                <pre class="activity-trace">@entry.ExceptionDetails</pre>
                             }
                         </article>
                     }
