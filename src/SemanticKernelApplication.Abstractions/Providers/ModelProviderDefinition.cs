@@ -66,11 +66,11 @@ public sealed class ModelProviderDefinition
 
         public ModelProviderDefinition Build()
         {
-            if (string.IsNullOrWhiteSpace(_id)) throw new InvalidOperationException("Provider id is required.");
-            if (string.IsNullOrWhiteSpace(_displayName)) throw new InvalidOperationException("Provider name is required.");
+            ArgumentException.ThrowIfNullOrWhiteSpace(_id);
+            ArgumentException.ThrowIfNullOrWhiteSpace(_displayName);
             if (_kind is null) throw new InvalidOperationException("Provider kind is required.");
-            if (_models is null) throw new InvalidOperationException("Provider models are required.");
-            if (string.IsNullOrWhiteSpace(_selectedModelId)) throw new InvalidOperationException("Selected model id is required.");
+            ArgumentNullException.ThrowIfNull(_models);
+            ArgumentException.ThrowIfNullOrWhiteSpace(_selectedModelId);
 
             return new ModelProviderDefinition(_id, _displayName, _kind.Value, _models, _selectedModelId, _isConfigured, _savedApiKey, _isDefault, _metadata);
         }

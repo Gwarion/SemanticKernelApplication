@@ -284,34 +284,19 @@ public sealed class ActivityLogEntry
         public ActivityLogEntry Build()
         {
             if (_kind is null)
-            {
                 throw new InvalidOperationException("Activity kind is required.");
-            }
 
             if (_status is null)
-            {
                 throw new InvalidOperationException("Activity status is required.");
-            }
 
             if (_severity is null)
-            {
                 throw new InvalidOperationException("Activity severity is required.");
-            }
 
-            if (string.IsNullOrWhiteSpace(_title))
-            {
-                throw new InvalidOperationException("Activity title is required.");
-            }
-
-            if (string.IsNullOrWhiteSpace(_message))
-            {
-                throw new InvalidOperationException("Activity message is required.");
-            }
+            ArgumentException.ThrowIfNullOrWhiteSpace(_title);
+            ArgumentException.ThrowIfNullOrWhiteSpace(_message);
 
             if (_timestampUtc == default)
-            {
                 throw new InvalidOperationException("Activity timestamp is required.");
-            }
 
             return new ActivityLogEntry(
                 _sequence,

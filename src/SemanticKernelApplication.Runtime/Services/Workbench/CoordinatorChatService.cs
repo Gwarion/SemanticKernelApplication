@@ -50,10 +50,7 @@ public sealed class CoordinatorChatService : ICoordinatorChatService
         CoordinatorChatRequest request,
         CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrWhiteSpace(request.Message))
-        {
-            throw new ArgumentException("Message is required.", nameof(request));
-        }
+        ArgumentException.ThrowIfNullOrWhiteSpace(request.Message);
 
         var trimmedMessage = request.Message.Trim();
         var thread = await GetOrCreateConversationAsync(request.ConversationId, cancellationToken);
@@ -61,9 +58,7 @@ public sealed class CoordinatorChatService : ICoordinatorChatService
         var userMessage = CreateMessage(thread.ThreadId, ConversationMessageRole.User, "user", trimmedMessage, turn.TurnId);
 
         if (CoordinatorIntentParser.TryExtractAgentDescription(trimmedMessage, out var agentDescription))
-        {
             return await HandleAgentCreationAsync(thread, turn, userMessage, agentDescription, cancellationToken);
-        }
 
         return await HandleCoordinationAsync(thread, turn, userMessage, trimmedMessage, cancellationToken);
     }
@@ -221,9 +216,7 @@ public sealed class CoordinatorChatService : ICoordinatorChatService
 
         var snapshot = await _snapshotFactory.GetWorkbenchSnapshotAsync(conversationId?.ToString("N"), cancellationToken);
         if (snapshot.ActiveConversation is not null)
-        {
             return snapshot.ActiveConversation;
-        }
 
         var participants = new List<ConversationParticipant>
         {
@@ -285,11 +278,8 @@ public sealed class CoordinatorChatService : ICoordinatorChatService
             .Build();
     }
 
-    private static IReadOnlyList<ConversationTurn> UpsertTurn(IReadOnlyList<ConversationTurn> existingTurns, ConversationTurn turn)
-    {
-        var remainingTurns = existingTurns.Where(item => item.TurnId != turn.TurnId).ToArray();
-        return [.. remainingTurns, turn];
-    }
+    private static IReadOnlyList<ConversationTurn> UpsertTurn(IReadOnlyList<ConversationTurn> existingTurns, ConversationTurn turn) =>
+        [.. existingTurns.Where(item => item.TurnId != turn.TurnId), turn];
 
     private static ConversationMessage CreateMessage(
         Guid threadId,
@@ -332,9 +322,7 @@ public sealed class CoordinatorChatService : ICoordinatorChatService
     {
         var agentParticipantId = agent.Id.ToString("N");
         if (thread.Participants.Any(participant => string.Equals(participant.ParticipantId, agentParticipantId, StringComparison.Ordinal)))
-        {
             return thread;
-        }
 
         return thread
             .ToBuilder()
@@ -353,9 +341,7 @@ public sealed class CoordinatorChatService : ICoordinatorChatService
         CancellationToken cancellationToken)
     {
         if (result.Rounds.Count == 0)
-        {
             return "No specialists were available. Create an agent from the studio panel and I'll route future work through it.";
-        }
 
         var recentConversation = thread.Messages
             .TakeLast(8)
@@ -391,9 +377,7 @@ public sealed class CoordinatorChatService : ICoordinatorChatService
             : coordinatorResult.Output;
     }
 
-    private static string ResolveParticipantName(ConversationThread thread, string authorId)
-    {
-        return thread.Participants.FirstOrDefault(participant => participant.ParticipantId == authorId)?.DisplayName
-            ?? authorId;
-    }
+    private static string ResolveParticipantName(ConversationThread thread, string authorId) =>
+        thread.Participants.FirstOrDefault(participant => participant.ParticipantId == authorId)?.DisplayName
+        ?? authorId;
 }

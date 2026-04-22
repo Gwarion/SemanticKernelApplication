@@ -165,24 +165,12 @@ public sealed class CoordinationResult
         public CoordinationResult Build()
         {
             if (_operationId is null || _operationId == Guid.Empty)
-            {
                 throw new InvalidOperationException("Coordination operation id is required.");
-            }
 
             if (_status is null)
-            {
                 throw new InvalidOperationException("Coordination status is required.");
-            }
-
-            if (_thread is null)
-            {
-                throw new InvalidOperationException("Coordination thread is required.");
-            }
-
-            if (_rounds is null)
-            {
-                throw new InvalidOperationException("Coordination rounds are required.");
-            }
+            ArgumentNullException.ThrowIfNull(_thread);
+            ArgumentNullException.ThrowIfNull(_rounds);
 
             return new CoordinationResult(
                 _operationId.Value,

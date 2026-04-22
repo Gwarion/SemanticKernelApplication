@@ -9,9 +9,7 @@ public sealed class FileSystemPlugin
     private readonly IWorkspaceContext _workspaceContext;
 
     public FileSystemPlugin(IWorkspaceContext workspaceContext)
-    {
-        _workspaceContext = workspaceContext;
-    }
+        => _workspaceContext = workspaceContext;
 
     [KernelFunction]
     [Description("Read a UTF-8 text file from the workspace root.")]
@@ -41,10 +39,9 @@ public sealed class FileSystemPlugin
     public string ListDirectory([Description("Relative path under the workspace root.")] string path = ".")
     {
         var fullPath = ResolvePath(path);
+
         if (!Directory.Exists(fullPath))
-        {
             return $"Directory '{path}' does not exist.";
-        }
 
         return string.Join(
             Environment.NewLine,
@@ -57,24 +54,18 @@ public sealed class FileSystemPlugin
     {
         var root = _workspaceContext.CurrentRootPath;
         var combined = Path.GetFullPath(Path.Combine(root, string.IsNullOrWhiteSpace(path) ? "." : path));
+
         if (!IsWithinRoot(root, combined))
-        {
             throw new InvalidOperationException("Path escapes the configured workspace root.");
-        }
 
         return combined;
     }
 
     private static bool IsWithinRoot(string root, string path)
     {
-        if (string.Equals(root, path, StringComparison.OrdinalIgnoreCase))
-        {
-            return true;
-        }
+        var normalizedRoot = $"{root.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)}{Path.DirectorySeparatorChar}";
 
-        var normalizedRoot = root.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
-            + Path.DirectorySeparatorChar;
-
-        return path.StartsWith(normalizedRoot, StringComparison.OrdinalIgnoreCase);
+        return string.Equals(root, path, StringComparison.OrdinalIgnoreCase)
+            || path.StartsWith(normalizedRoot, StringComparison.OrdinalIgnoreCase);
     }
 }

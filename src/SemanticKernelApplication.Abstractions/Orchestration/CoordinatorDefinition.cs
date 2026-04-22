@@ -53,10 +53,10 @@ public sealed class CoordinatorDefinition
         public CoordinatorDefinition Build()
         {
             if (_id is null || _id == Guid.Empty) throw new InvalidOperationException("Coordinator id is required.");
-            if (string.IsNullOrWhiteSpace(_name)) throw new InvalidOperationException("Coordinator name is required.");
-            if (string.IsNullOrWhiteSpace(_description)) throw new InvalidOperationException("Coordinator description is required.");
+            ArgumentException.ThrowIfNullOrWhiteSpace(_name);
+            ArgumentException.ThrowIfNullOrWhiteSpace(_description);
             if (_policy is null) throw new InvalidOperationException("Coordination policy is required.");
-            if (_instructions is null) throw new InvalidOperationException("Coordinator instructions are required.");
+            ArgumentNullException.ThrowIfNull(_instructions);
 
             return new CoordinatorDefinition(_id.Value, _name, _description, _policy, _instructions, _metadata);
         }

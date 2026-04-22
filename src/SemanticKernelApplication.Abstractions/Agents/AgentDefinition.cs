@@ -137,10 +137,10 @@ public sealed class AgentDefinition
         public AgentDefinition Build()
         {
             if (_id is null || _id == Guid.Empty) throw new InvalidOperationException("Agent id is required.");
-            if (string.IsNullOrWhiteSpace(_name)) throw new InvalidOperationException("Agent name is required.");
+            ArgumentException.ThrowIfNullOrWhiteSpace(_name);
             if (_kind is null) throw new InvalidOperationException("Agent kind is required.");
-            if (string.IsNullOrWhiteSpace(_description)) throw new InvalidOperationException("Agent description is required.");
-            if (_instructions is null) throw new InvalidOperationException("Agent instructions are required.");
+            ArgumentException.ThrowIfNullOrWhiteSpace(_description);
+            ArgumentNullException.ThrowIfNull(_instructions);
 
             return new AgentDefinition(
                 _id.Value,

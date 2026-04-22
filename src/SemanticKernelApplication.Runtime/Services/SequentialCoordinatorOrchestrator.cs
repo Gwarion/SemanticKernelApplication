@@ -55,9 +55,7 @@ public sealed class SequentialCoordinatorOrchestrator : ICoordinatorOrchestrator
             {
                 var agentDefinition = await _agentDefinitionStore.GetAsync(agentReference.AgentId, cancellationToken);
                 if (agentDefinition is null)
-                {
                     continue;
-                }
 
                 await PublishAsync(
                     ActivityKind.AgentExecution,
@@ -143,11 +141,9 @@ public sealed class SequentialCoordinatorOrchestrator : ICoordinatorOrchestrator
             .Build();
     }
 
-    private static string ResolveParticipantName(ConversationThread thread, string authorId)
-    {
-        return thread.Participants.FirstOrDefault(participant => participant.ParticipantId == authorId)?.DisplayName
-            ?? authorId;
-    }
+    private static string ResolveParticipantName(ConversationThread thread, string authorId) =>
+        thread.Participants.FirstOrDefault(participant => participant.ParticipantId == authorId)?.DisplayName
+        ?? authorId;
 
     private ValueTask PublishAsync(
         ActivityKind kind,
@@ -206,15 +202,11 @@ public sealed class SequentialCoordinatorOrchestrator : ICoordinatorOrchestrator
             if (metadata is not null)
             {
                 foreach (var pair in metadata)
-                {
                     activityMetadata[pair.Key] = pair.Value;
-                }
             }
 
             if (!string.IsNullOrWhiteSpace(failureReason))
-            {
                 activityMetadata["failureReason"] = failureReason;
-            }
         }
 
         return _activitySink.PublishAsync(
@@ -238,9 +230,7 @@ public sealed class SequentialCoordinatorOrchestrator : ICoordinatorOrchestrator
     private static Guid? TryGetGuid(IReadOnlyDictionary<string, string>? metadata, string key)
     {
         if (metadata is null || !metadata.TryGetValue(key, out var rawValue) || !Guid.TryParse(rawValue, out var value))
-        {
             return null;
-        }
 
         return value;
     }

@@ -59,10 +59,10 @@ public sealed class CoordinationRequest
         public CoordinationRequest Build()
         {
             if (_operationId is null || _operationId == Guid.Empty) throw new InvalidOperationException("Operation id is required.");
-            if (_coordinator is null) throw new InvalidOperationException("Coordinator is required.");
-            if (_thread is null) throw new InvalidOperationException("Conversation thread is required.");
-            if (_agents is null) throw new InvalidOperationException("Agent list is required.");
-            if (string.IsNullOrWhiteSpace(_objective)) throw new InvalidOperationException("Objective is required.");
+            ArgumentNullException.ThrowIfNull(_coordinator);
+            ArgumentNullException.ThrowIfNull(_thread);
+            ArgumentNullException.ThrowIfNull(_agents);
+            ArgumentException.ThrowIfNullOrWhiteSpace(_objective);
 
             return new CoordinationRequest(_operationId.Value, _coordinator, _thread, _agents, _objective, _metadata, _requestedAtUtc);
         }

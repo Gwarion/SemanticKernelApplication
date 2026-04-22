@@ -22,15 +22,13 @@ public sealed class ConfigurationAiProviderCatalog : IAiProviderCatalog
         return provider is null ? null : ToDefinition(provider);
     }
 
-    public IReadOnlyList<ModelProviderDefinition> GetProviders() =>
-        _configurationStore.GetProviders().Select(ToDefinition).ToArray();
+    public IReadOnlyList<ModelProviderDefinition> GetProviders() 
+        => _configurationStore.GetProviders().Select(ToDefinition).ToArray();
 
     public AgentProviderRegistration? GetRegistration(string? providerId)
     {
         if (string.IsNullOrWhiteSpace(providerId))
-        {
             return _sessionConfiguration.ResolveSelectedProvider();
-        }
 
         return _configurationStore.GetProvider(providerId);
     }

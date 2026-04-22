@@ -7,10 +7,8 @@ public sealed class GitPlugin
 {
     private readonly ShellPlugin _shellPlugin;
 
-    public GitPlugin(ShellPlugin shellPlugin)
-    {
-        _shellPlugin = shellPlugin;
-    }
+    public GitPlugin(ShellPlugin shellPlugin) 
+        => _shellPlugin = shellPlugin;
 
     [KernelFunction]
     [Description("Show the current git status for the workspace.")]

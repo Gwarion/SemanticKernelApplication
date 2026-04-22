@@ -36,24 +36,18 @@ public sealed class SemanticKernelAgentExecutor : IAgentExecutor
         var provider = _providerCatalog.GetProvider(null);
 
         if (provider is null || !provider.IsConfigured)
-        {
             return BuildFallbackResult(request, startedAt, provider);
-        }
 
         AgentProviderRegistration? registration = null;
         try
         {
             registration = _providerCatalog.GetRegistration(null);
             if (registration is null)
-            {
                 return BuildFallbackResult(request, startedAt, provider);
-            }
 
             var kernel = BuildKernel(registration);
             foreach (var plugin in _pluginCatalog.GetPlugins())
-            {
                 kernel.Plugins.AddFromObject(plugin.Instance, plugin.Name);
-            }
 
             var chat = kernel.GetRequiredService<IChatCompletionService>();
             var history = new ChatHistory(BuildSystemPrompt(request));
@@ -103,9 +97,8 @@ public sealed class SemanticKernelAgentExecutor : IAgentExecutor
         }
     }
 
-    private static PromptExecutionSettings? CreateExecutionSettings(AgentProviderRegistration provider)
-    {
-        return provider.Kind switch
+    private static PromptExecutionSettings? CreateExecutionSettings(AgentProviderRegistration provider) =>
+        provider.Kind switch
         {
             AiProviderKind.OpenAI or AiProviderKind.OpenAICompatible => new OpenAIPromptExecutionSettings
             {
@@ -117,7 +110,6 @@ public sealed class SemanticKernelAgentExecutor : IAgentExecutor
             },
             _ => null
         };
-    }
 
     private Kernel BuildKernel(AgentProviderRegistration provider)
     {
@@ -177,9 +169,7 @@ public sealed class SemanticKernelAgentExecutor : IAgentExecutor
     {
         if (request.Metadata?.TryGetValue("systemPrompt", out var systemPromptOverride) == true
             && !string.IsNullOrWhiteSpace(systemPromptOverride))
-        {
             return systemPromptOverride;
-        }
 
         var agentDescription = request.Metadata?.GetValueOrDefault("agentDescription") ?? request.Agent.DisplayName;
         var agentSystemPrompt = request.Metadata?.GetValueOrDefault("agentSystemPrompt");
@@ -197,9 +187,7 @@ public sealed class SemanticKernelAgentExecutor : IAgentExecutor
     private static void AppendConversationHistory(ChatHistory history, string? conversationHistory)
     {
         if (string.IsNullOrWhiteSpace(conversationHistory))
-        {
             return;
-        }
 
         history.AddSystemMessage(
             $$"""

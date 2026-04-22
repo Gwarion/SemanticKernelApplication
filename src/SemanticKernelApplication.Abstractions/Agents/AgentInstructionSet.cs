@@ -94,10 +94,7 @@ public sealed class AgentInstructionSet
 
         public AgentInstructionSet Build()
         {
-            if (_systemPrompt is null)
-            {
-                throw new InvalidOperationException("System prompt is required.");
-            }
+            ArgumentNullException.ThrowIfNull(_systemPrompt);
 
             return new AgentInstructionSet(_systemPrompt, _goals, _constraints, _variables);
         }

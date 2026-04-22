@@ -45,10 +45,7 @@ public sealed class AgentWorkbenchService : IAgentWorkbenchService
         WorkspaceSelectionRequest request,
         CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrWhiteSpace(request.WorkspacePath))
-        {
-            throw new ArgumentException("Workspace path is required.", nameof(request));
-        }
+        ArgumentException.ThrowIfNullOrWhiteSpace(request.WorkspacePath);
 
         var workspacePath = _workspaceContext.SetRootPath(request.WorkspacePath);
 

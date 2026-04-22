@@ -24,10 +24,7 @@ public sealed class AgentCreationService : IAgentCreationService
         PlainTextAgentCreationRequest request,
         CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrWhiteSpace(request.Description))
-        {
-            throw new ArgumentException("Agent description is required.", nameof(request));
-        }
+        ArgumentException.ThrowIfNullOrWhiteSpace(request.Description);
 
         var definition = _definitionFactory.Create(request);
         definition = await _agentDefinitionStore.UpsertAsync(definition, cancellationToken);
