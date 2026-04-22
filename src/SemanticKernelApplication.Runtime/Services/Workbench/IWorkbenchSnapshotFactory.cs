@@ -6,5 +6,5 @@ public interface IWorkbenchSnapshotFactory
 {
     Task<WorkbenchSnapshot> GetWorkbenchSnapshotAsync(string? conversationId = null, CancellationToken cancellationToken = default);
 
-    void SetActiveConversation(string? conversationId);
+    void SetActiveConversation(Guid? conversationId);
 }

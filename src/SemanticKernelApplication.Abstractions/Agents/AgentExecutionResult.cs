@@ -9,7 +9,7 @@ public sealed class AgentExecutionResult
 {
     [JsonConstructor]
     private AgentExecutionResult(
-        string operationId,
+        Guid operationId,
         AgentExecutionStatus status,
         string? output,
         string? summary,
@@ -30,7 +30,7 @@ public sealed class AgentExecutionResult
 
     public static AgentExecutionResultBuilder Builder => new();
 
-    public string OperationId { get; }
+    public Guid OperationId { get; }
     public AgentExecutionStatus Status { get; }
     public string? Output { get; }
     public string? Summary { get; }
@@ -41,7 +41,7 @@ public sealed class AgentExecutionResult
 
     public sealed class AgentExecutionResultBuilder
     {
-        private string? _operationId;
+        private Guid? _operationId;
         private AgentExecutionStatus? _status;
         private string? _output;
         private string? _summary;
@@ -50,7 +50,7 @@ public sealed class AgentExecutionResult
         private DateTimeOffset? _completedAtUtc;
         private string? _failureReason;
 
-        public AgentExecutionResultBuilder WithOperationId(string operationId) { _operationId = operationId; return this; }
+        public AgentExecutionResultBuilder WithOperationId(Guid operationId) { _operationId = operationId; return this; }
         public AgentExecutionResultBuilder WithStatus(AgentExecutionStatus status) { _status = status; return this; }
         public AgentExecutionResultBuilder WithOutput(string? output) { _output = output; return this; }
         public AgentExecutionResultBuilder WithSummary(string? summary) { _summary = summary; return this; }
@@ -61,10 +61,10 @@ public sealed class AgentExecutionResult
 
         public AgentExecutionResult Build()
         {
-            if (string.IsNullOrWhiteSpace(_operationId)) throw new InvalidOperationException("Operation id is required.");
+            if (_operationId is null || _operationId == Guid.Empty) throw new InvalidOperationException("Operation id is required.");
             if (_status is null) throw new InvalidOperationException("Execution status is required.");
 
-            return new AgentExecutionResult(_operationId, _status.Value, _output, _summary, _metadata, _startedAtUtc, _completedAtUtc, _failureReason);
+            return new AgentExecutionResult(_operationId.Value, _status.Value, _output, _summary, _metadata, _startedAtUtc, _completedAtUtc, _failureReason);
         }
     }
 }

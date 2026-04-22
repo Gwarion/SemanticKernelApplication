@@ -12,6 +12,7 @@ namespace SemanticKernelApplication.Runtime.Services.Workbench;
 public sealed class CoordinatorChatService : ICoordinatorChatService
 {
     private const string CoordinatorId = "coordinator";
+    private static readonly Guid CoordinatorDefinitionId = Guid.Parse("11111111-1111-1111-1111-111111111111");
 
     private readonly IAgentCreationService _agentCreationService;
     private readonly IAgentDefinitionStore _agentDefinitionStore;
@@ -87,7 +88,7 @@ public sealed class CoordinatorChatService : ICoordinatorChatService
 
         await _activitySink.PublishAsync(
             new ActivityStreamEnvelope(
-                updatedThread.ThreadId,
+                updatedThread.ThreadId.ToString("N"),
                 ActivityLogEntry.Builder
                     .WithSequence(0)
                     .WithKind(ActivityKind.Coordination)
@@ -105,7 +106,7 @@ public sealed class CoordinatorChatService : ICoordinatorChatService
             updatedThread.ThreadId,
             replyText,
             CoordinationResult.Builder
-                .WithOperationId(Guid.NewGuid().ToString("N"))
+                .WithOperationId(Guid.NewGuid())
                 .WithStatus(ActivityStatus.Completed)
                 .WithThread(updatedThread)
                 .WithRounds([])
@@ -126,7 +127,7 @@ public sealed class CoordinatorChatService : ICoordinatorChatService
 
         await _activitySink.PublishAsync(
             new ActivityStreamEnvelope(
-                savedThread.ThreadId,
+                savedThread.ThreadId.ToString("N"),
                 ActivityLogEntry.Builder
                     .WithSequence(0)
                     .WithKind(ActivityKind.Message)
@@ -141,7 +142,7 @@ public sealed class CoordinatorChatService : ICoordinatorChatService
 
         var agents = await _agentDefinitionStore.ListAsync(cancellationToken);
         var coordinator = CoordinatorDefinition.Builder
-            .WithId(CoordinatorId)
+            .WithId(CoordinatorDefinitionId)
             .WithName("Coordinator")
             .WithDescription("Routes user goals to the current bench of agents and summarizes public progress.")
             .WithPolicy(new CoordinationPolicy(CoordinationMode.Sequential, 1))
@@ -153,14 +154,14 @@ public sealed class CoordinatorChatService : ICoordinatorChatService
 
         var result = await _orchestrator.ExecuteAsync(
                 CoordinationRequest.Builder
-                    .WithOperationId(Guid.NewGuid().ToString("N"))
+                    .WithOperationId(Guid.NewGuid())
                     .WithCoordinator(coordinator)
                     .WithThread(savedThread)
                     .WithAgents(agents.Select(agent => new AgentReference(agent.Id, agent.Name, agent.Kind)).ToArray())
                     .WithObjective(trimmedMessage)
                     .WithMetadata(new Dictionary<string, string>
                     {
-                        ["turnId"] = turn.TurnId
+                        ["turnId"] = turn.TurnId.ToString("N")
                     })
                     .Build(),
             cancellationToken);
@@ -175,7 +176,7 @@ public sealed class CoordinatorChatService : ICoordinatorChatService
 
         await _activitySink.PublishAsync(
             new ActivityStreamEnvelope(
-                updatedThread.ThreadId,
+                updatedThread.ThreadId.ToString("N"),
                 ActivityLogEntry.Builder
                     .WithSequence(0)
                     .WithKind(ActivityKind.Coordination)
@@ -205,12 +206,12 @@ public sealed class CoordinatorChatService : ICoordinatorChatService
     }
 
     private async Task<ConversationThread> GetOrCreateConversationAsync(
-        string? conversationId,
+        Guid? conversationId,
         CancellationToken cancellationToken)
     {
-        if (!string.IsNullOrWhiteSpace(conversationId))
+        if (conversationId is not null && conversationId != Guid.Empty)
         {
-            var existing = await _conversationStore.GetAsync(conversationId, cancellationToken);
+            var existing = await _conversationStore.GetAsync(conversationId.Value, cancellationToken);
             if (existing is not null)
             {
                 _snapshotFactory.SetActiveConversation(existing.ThreadId);
@@ -218,7 +219,7 @@ public sealed class CoordinatorChatService : ICoordinatorChatService
             }
         }
 
-        var snapshot = await _snapshotFactory.GetWorkbenchSnapshotAsync(conversationId, cancellationToken);
+        var snapshot = await _snapshotFactory.GetWorkbenchSnapshotAsync(conversationId?.ToString("N"), cancellationToken);
         if (snapshot.ActiveConversation is not null)
         {
             return snapshot.ActiveConversation;
@@ -232,10 +233,14 @@ public sealed class CoordinatorChatService : ICoordinatorChatService
 
         var agents = await _agentDefinitionStore.ListAsync(cancellationToken);
         participants.AddRange(
-            agents.Select(agent => new ConversationParticipant(agent.Id, agent.Name, ConversationParticipantKind.Agent, agent.Id)));
+            agents.Select(agent =>
+            {
+                var agentParticipantId = agent.Id.ToString("N");
+                return new ConversationParticipant(agentParticipantId, agent.Name, ConversationParticipantKind.Agent, agentParticipantId);
+            }));
 
         var thread = ConversationThread.Builder
-            .WithThreadId(Guid.NewGuid().ToString("N"))
+            .WithThreadId(Guid.NewGuid())
             .WithTitle("Coordinator session")
             .WithState(ConversationState.Active)
             .WithParticipants(participants)
@@ -271,7 +276,7 @@ public sealed class CoordinatorChatService : ICoordinatorChatService
     private static ConversationTurn CreateTurn(ConversationThread thread, string initiatedByParticipantId, string goal)
     {
         return ConversationTurn.Builder
-            .WithTurnId(Guid.NewGuid().ToString("N"))
+            .WithTurnId(Guid.NewGuid())
             .WithThreadId(thread.ThreadId)
             .WithSequence(thread.Turns.Count + 1)
             .WithInitiatedByParticipantId(initiatedByParticipantId)
@@ -282,19 +287,19 @@ public sealed class CoordinatorChatService : ICoordinatorChatService
 
     private static IReadOnlyList<ConversationTurn> UpsertTurn(IReadOnlyList<ConversationTurn> existingTurns, ConversationTurn turn)
     {
-        var remainingTurns = existingTurns.Where(item => !string.Equals(item.TurnId, turn.TurnId, StringComparison.Ordinal)).ToArray();
+        var remainingTurns = existingTurns.Where(item => item.TurnId != turn.TurnId).ToArray();
         return [.. remainingTurns, turn];
     }
 
     private static ConversationMessage CreateMessage(
-        string threadId,
+        Guid threadId,
         ConversationMessageRole role,
         string authorId,
         string content,
-        string turnId)
+        Guid turnId)
     {
         return ConversationMessage.Builder
-            .WithMessageId(Guid.NewGuid().ToString("N"))
+            .WithMessageId(Guid.NewGuid())
             .WithThreadId(threadId)
             .WithRole(role)
             .WithAuthorId(authorId)
@@ -305,14 +310,14 @@ public sealed class CoordinatorChatService : ICoordinatorChatService
     }
 
     private static ConversationMessage CreateReplyMessage(
-        string threadId,
+        Guid threadId,
         string authorId,
         string content,
-        string turnId,
-        string parentMessageId)
+        Guid turnId,
+        Guid parentMessageId)
     {
         return ConversationMessage.Builder
-            .WithMessageId(Guid.NewGuid().ToString("N"))
+            .WithMessageId(Guid.NewGuid())
             .WithThreadId(threadId)
             .WithRole(ConversationMessageRole.Assistant)
             .WithAuthorId(authorId)
@@ -325,7 +330,8 @@ public sealed class CoordinatorChatService : ICoordinatorChatService
 
     private static ConversationThread EnsureAgentParticipant(ConversationThread thread, AgentDefinition agent)
     {
-        if (thread.Participants.Any(participant => string.Equals(participant.ParticipantId, agent.Id, StringComparison.Ordinal)))
+        var agentParticipantId = agent.Id.ToString("N");
+        if (thread.Participants.Any(participant => string.Equals(participant.ParticipantId, agentParticipantId, StringComparison.Ordinal)))
         {
             return thread;
         }
@@ -335,7 +341,7 @@ public sealed class CoordinatorChatService : ICoordinatorChatService
             .WithParticipants(
             [
                 .. thread.Participants,
-                new ConversationParticipant(agent.Id, agent.Name, ConversationParticipantKind.Agent, agent.Id)
+                new ConversationParticipant(agentParticipantId, agent.Name, ConversationParticipantKind.Agent, agentParticipantId)
             ])
             .Build();
     }
@@ -361,8 +367,8 @@ public sealed class CoordinatorChatService : ICoordinatorChatService
             .Select(message => $"- {ResolveParticipantName(result.Thread, message.AuthorId)}: {message.Content}");
 
         var coordinatorRequest = new AgentExecutionRequest(
-            Guid.NewGuid().ToString("N"),
-            new AgentReference(CoordinatorId, "Coordinator", AgentKind.Coordinator),
+            Guid.NewGuid(),
+            new AgentReference(CoordinatorDefinitionId, "Coordinator", AgentKind.Coordinator),
             $$"""
             User request:
             {{userMessage}}

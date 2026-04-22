@@ -11,7 +11,7 @@ public sealed class CoordinationRequest
 {
     [JsonConstructor]
     private CoordinationRequest(
-        string operationId,
+        Guid operationId,
         CoordinatorDefinition coordinator,
         ConversationThread thread,
         IReadOnlyList<AgentReference> agents,
@@ -30,7 +30,7 @@ public sealed class CoordinationRequest
 
     public static CoordinationRequestBuilder Builder => new();
 
-    public string OperationId { get; }
+    public Guid OperationId { get; }
     public CoordinatorDefinition Coordinator { get; }
     public ConversationThread Thread { get; }
     public IReadOnlyList<AgentReference> Agents { get; }
@@ -40,7 +40,7 @@ public sealed class CoordinationRequest
 
     public sealed class CoordinationRequestBuilder
     {
-        private string? _operationId;
+        private Guid? _operationId;
         private CoordinatorDefinition? _coordinator;
         private ConversationThread? _thread;
         private IReadOnlyList<AgentReference>? _agents;
@@ -48,7 +48,7 @@ public sealed class CoordinationRequest
         private IReadOnlyDictionary<string, string>? _metadata;
         private DateTimeOffset? _requestedAtUtc;
 
-        public CoordinationRequestBuilder WithOperationId(string operationId) { _operationId = operationId; return this; }
+        public CoordinationRequestBuilder WithOperationId(Guid operationId) { _operationId = operationId; return this; }
         public CoordinationRequestBuilder WithCoordinator(CoordinatorDefinition coordinator) { _coordinator = coordinator; return this; }
         public CoordinationRequestBuilder WithThread(ConversationThread thread) { _thread = thread; return this; }
         public CoordinationRequestBuilder WithAgents(IReadOnlyList<AgentReference> agents) { _agents = agents; return this; }
@@ -58,13 +58,13 @@ public sealed class CoordinationRequest
 
         public CoordinationRequest Build()
         {
-            if (string.IsNullOrWhiteSpace(_operationId)) throw new InvalidOperationException("Operation id is required.");
+            if (_operationId is null || _operationId == Guid.Empty) throw new InvalidOperationException("Operation id is required.");
             if (_coordinator is null) throw new InvalidOperationException("Coordinator is required.");
             if (_thread is null) throw new InvalidOperationException("Conversation thread is required.");
             if (_agents is null) throw new InvalidOperationException("Agent list is required.");
             if (string.IsNullOrWhiteSpace(_objective)) throw new InvalidOperationException("Objective is required.");
 
-            return new CoordinationRequest(_operationId, _coordinator, _thread, _agents, _objective, _metadata, _requestedAtUtc);
+            return new CoordinationRequest(_operationId.Value, _coordinator, _thread, _agents, _objective, _metadata, _requestedAtUtc);
         }
     }
 }

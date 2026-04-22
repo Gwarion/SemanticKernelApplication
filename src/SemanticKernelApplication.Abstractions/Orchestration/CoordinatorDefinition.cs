@@ -10,7 +10,7 @@ public sealed class CoordinatorDefinition
 {
     [JsonConstructor]
     private CoordinatorDefinition(
-        string id,
+        Guid id,
         string name,
         string description,
         CoordinationPolicy policy,
@@ -27,7 +27,7 @@ public sealed class CoordinatorDefinition
 
     public static CoordinatorDefinitionBuilder Builder => new();
 
-    public string Id { get; }
+    public Guid Id { get; }
     public string Name { get; }
     public string Description { get; }
     public CoordinationPolicy Policy { get; }
@@ -36,14 +36,14 @@ public sealed class CoordinatorDefinition
 
     public sealed class CoordinatorDefinitionBuilder
     {
-        private string? _id;
+        private Guid? _id;
         private string? _name;
         private string? _description;
         private CoordinationPolicy? _policy;
         private AgentInstructionSet? _instructions;
         private IReadOnlyDictionary<string, string>? _metadata;
 
-        public CoordinatorDefinitionBuilder WithId(string id) { _id = id; return this; }
+        public CoordinatorDefinitionBuilder WithId(Guid id) { _id = id; return this; }
         public CoordinatorDefinitionBuilder WithName(string name) { _name = name; return this; }
         public CoordinatorDefinitionBuilder WithDescription(string description) { _description = description; return this; }
         public CoordinatorDefinitionBuilder WithPolicy(CoordinationPolicy policy) { _policy = policy; return this; }
@@ -52,13 +52,13 @@ public sealed class CoordinatorDefinition
 
         public CoordinatorDefinition Build()
         {
-            if (string.IsNullOrWhiteSpace(_id)) throw new InvalidOperationException("Coordinator id is required.");
+            if (_id is null || _id == Guid.Empty) throw new InvalidOperationException("Coordinator id is required.");
             if (string.IsNullOrWhiteSpace(_name)) throw new InvalidOperationException("Coordinator name is required.");
             if (string.IsNullOrWhiteSpace(_description)) throw new InvalidOperationException("Coordinator description is required.");
             if (_policy is null) throw new InvalidOperationException("Coordination policy is required.");
             if (_instructions is null) throw new InvalidOperationException("Coordinator instructions are required.");
 
-            return new CoordinatorDefinition(_id, _name, _description, _policy, _instructions, _metadata);
+            return new CoordinatorDefinition(_id.Value, _name, _description, _policy, _instructions, _metadata);
         }
     }
 }

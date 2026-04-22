@@ -19,7 +19,7 @@ public sealed class LocalConversationStore : IConversationStore
         EnsureSchema();
     }
 
-    public Task<ConversationThread?> GetAsync(string threadId, CancellationToken cancellationToken = default)
+    public Task<ConversationThread?> GetAsync(Guid threadId, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
@@ -32,7 +32,7 @@ public sealed class LocalConversationStore : IConversationStore
             WHERE thread_id = $threadId
             LIMIT 1;
             """;
-        command.Parameters.AddWithValue("$threadId", threadId);
+        command.Parameters.AddWithValue("$threadId", threadId.ToString("N"));
 
         var payload = command.ExecuteScalar() as string;
         var thread = string.IsNullOrWhiteSpace(payload)
@@ -71,7 +71,7 @@ public sealed class LocalConversationStore : IConversationStore
                 updated_at_utc = excluded.updated_at_utc,
                 payload_json = excluded.payload_json;
             """;
-        command.Parameters.AddWithValue("$threadId", thread.ThreadId);
+        command.Parameters.AddWithValue("$threadId", thread.ThreadId.ToString("N"));
         command.Parameters.AddWithValue("$title", thread.Title);
         command.Parameters.AddWithValue("$state", thread.State.ToString());
         command.Parameters.AddWithValue("$createdAtUtc", thread.CreatedAtUtc.ToString("O"));

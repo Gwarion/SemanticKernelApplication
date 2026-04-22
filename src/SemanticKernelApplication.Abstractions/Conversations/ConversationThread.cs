@@ -9,7 +9,7 @@ public sealed class ConversationThread
 {
     [JsonConstructor]
     private ConversationThread(
-        string threadId,
+        Guid threadId,
         string title,
         ConversationState state,
         IReadOnlyList<ConversationParticipant> participants,
@@ -32,7 +32,7 @@ public sealed class ConversationThread
 
     public static ConversationThreadBuilder Builder => new();
 
-    public string ThreadId { get; }
+    public Guid ThreadId { get; }
     public string Title { get; }
     public ConversationState State { get; }
     public IReadOnlyList<ConversationParticipant> Participants { get; }
@@ -56,7 +56,7 @@ public sealed class ConversationThread
 
     public sealed class ConversationThreadBuilder
     {
-        private string? _threadId;
+        private Guid? _threadId;
         private string? _title;
         private ConversationState? _state;
         private IReadOnlyList<ConversationParticipant>? _participants;
@@ -66,7 +66,7 @@ public sealed class ConversationThread
         private DateTimeOffset? _updatedAtUtc;
         private IReadOnlyDictionary<string, string>? _metadata;
 
-        public ConversationThreadBuilder WithThreadId(string threadId) { _threadId = threadId; return this; }
+        public ConversationThreadBuilder WithThreadId(Guid threadId) { _threadId = threadId; return this; }
         public ConversationThreadBuilder WithTitle(string title) { _title = title; return this; }
         public ConversationThreadBuilder WithState(ConversationState state) { _state = state; return this; }
         public ConversationThreadBuilder WithParticipants(IReadOnlyList<ConversationParticipant> participants) { _participants = participants; return this; }
@@ -78,7 +78,7 @@ public sealed class ConversationThread
 
         public ConversationThread Build()
         {
-            if (string.IsNullOrWhiteSpace(_threadId)) throw new InvalidOperationException("Thread id is required.");
+            if (_threadId is null || _threadId == Guid.Empty) throw new InvalidOperationException("Thread id is required.");
             if (string.IsNullOrWhiteSpace(_title)) throw new InvalidOperationException("Thread title is required.");
             if (_state is null) throw new InvalidOperationException("Thread state is required.");
             if (_participants is null) throw new InvalidOperationException("Participants are required.");
@@ -86,7 +86,7 @@ public sealed class ConversationThread
             if (_messages is null) throw new InvalidOperationException("Messages are required.");
             if (_createdAtUtc == default) throw new InvalidOperationException("Created timestamp is required.");
 
-            return new ConversationThread(_threadId, _title, _state.Value, _participants, _turns, _messages, _createdAtUtc, _updatedAtUtc, _metadata);
+            return new ConversationThread(_threadId.Value, _title, _state.Value, _participants, _turns, _messages, _createdAtUtc, _updatedAtUtc, _metadata);
         }
     }
 }

@@ -11,10 +11,10 @@ namespace SemanticKernelApplication.Abstractions.Agents;
 /// <param name="Metadata">Optional execution metadata.</param>
 /// <param name="RequestedAtUtc">Optional request timestamp.</param>
 public sealed record AgentExecutionRequest(
-    string OperationId,
+    Guid OperationId,
     AgentReference Agent,
     string Input,
-    string? ConversationId = null,
-    string? CorrelationId = null,
+    Guid? ConversationId = null,
+    Guid? CorrelationId = null,
     IReadOnlyDictionary<string, string>? Metadata = null,
     DateTimeOffset? RequestedAtUtc = null);

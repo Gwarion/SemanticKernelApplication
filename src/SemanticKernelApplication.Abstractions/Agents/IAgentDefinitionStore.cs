@@ -16,7 +16,7 @@ public interface IAgentDefinitionStore
     /// </summary>
     /// <param name="agentId">Identifier of the agent to fetch.</param>
     /// <param name="cancellationToken">Token used to cancel the operation.</param>
-    Task<AgentDefinition?> GetAsync(string agentId, CancellationToken cancellationToken = default);
+    Task<AgentDefinition?> GetAsync(Guid agentId, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Inserts or updates an agent definition.

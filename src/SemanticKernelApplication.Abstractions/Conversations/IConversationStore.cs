@@ -10,7 +10,7 @@ public interface IConversationStore
     /// </summary>
     /// <param name="threadId">Identifier of the thread to load.</param>
     /// <param name="cancellationToken">Token used to cancel the operation.</param>
-    Task<ConversationThread?> GetAsync(string threadId, CancellationToken cancellationToken = default);
+    Task<ConversationThread?> GetAsync(Guid threadId, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Saves a conversation thread and returns the stored representation.

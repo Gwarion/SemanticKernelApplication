@@ -5,9 +5,9 @@ namespace SemanticKernelApplication.Runtime.Services;
 
 public sealed class InMemoryAgentDefinitionStore : IAgentDefinitionStore
 {
-    private readonly ConcurrentDictionary<string, AgentDefinition> _agents = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<Guid, AgentDefinition> _agents = [];
 
-    public Task<AgentDefinition?> GetAsync(string agentId, CancellationToken cancellationToken = default)
+    public Task<AgentDefinition?> GetAsync(Guid agentId, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
         _agents.TryGetValue(agentId, out var agent);
@@ -31,7 +31,7 @@ public sealed class InMemoryAgentDefinitionStore : IAgentDefinitionStore
         var now = DateTimeOffset.UtcNow;
         var normalized = definition
             .ToBuilder()
-            .WithId(string.IsNullOrWhiteSpace(definition.Id) ? Guid.NewGuid().ToString("N") : definition.Id)
+            .WithId(definition.Id == Guid.Empty ? Guid.NewGuid() : definition.Id)
             .WithCreatedAtUtc(definition.CreatedAtUtc ?? now)
             .WithUpdatedAtUtc(now)
             .Build();

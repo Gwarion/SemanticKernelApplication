@@ -9,7 +9,7 @@ namespace SemanticKernelApplication.Abstractions.Orchestration;
 public sealed class CoordinationResult
 {
     private CoordinationResult(
-        string operationId,
+        Guid operationId,
         ActivityStatus status,
         ConversationThread thread,
         IReadOnlyList<CoordinationRound> rounds,
@@ -36,7 +36,7 @@ public sealed class CoordinationResult
     /// <summary>
     /// Gets the unique identifier for the coordination run.
     /// </summary>
-    public string OperationId { get; }
+    public Guid OperationId { get; }
 
     /// <summary>
     /// Gets the final activity status of the run.
@@ -78,7 +78,7 @@ public sealed class CoordinationResult
     /// </summary>
     public sealed class CoordinationResultBuilder
     {
-        private string? _operationId;
+        private Guid? _operationId;
         private ActivityStatus? _status;
         private ConversationThread? _thread;
         private IReadOnlyList<CoordinationRound>? _rounds;
@@ -90,7 +90,7 @@ public sealed class CoordinationResult
         /// <summary>
         /// Sets the unique identifier for the coordination run.
         /// </summary>
-        public CoordinationResultBuilder WithOperationId(string operationId)
+        public CoordinationResultBuilder WithOperationId(Guid operationId)
         {
             _operationId = operationId;
             return this;
@@ -164,7 +164,7 @@ public sealed class CoordinationResult
         /// </summary>
         public CoordinationResult Build()
         {
-            if (string.IsNullOrWhiteSpace(_operationId))
+            if (_operationId is null || _operationId == Guid.Empty)
             {
                 throw new InvalidOperationException("Coordination operation id is required.");
             }
@@ -185,7 +185,7 @@ public sealed class CoordinationResult
             }
 
             return new CoordinationResult(
-                _operationId,
+                _operationId.Value,
                 _status.Value,
                 _thread,
                 _rounds,

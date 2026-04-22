@@ -14,10 +14,10 @@ public sealed class ActivityLogEntry
         string message,
         DateTimeOffset timestampUtc,
         string? sessionId,
-        string? conversationId,
-        string? agentId,
-        string? turnId,
-        string? correlationId,
+        Guid? conversationId,
+        Guid? agentId,
+        Guid? turnId,
+        Guid? correlationId,
         string? delta,
         IReadOnlyDictionary<string, string>? metadata)
     {
@@ -85,22 +85,22 @@ public sealed class ActivityLogEntry
     /// <summary>
     /// Gets the optional conversation identifier for correlation.
     /// </summary>
-    public string? ConversationId { get; }
+    public Guid? ConversationId { get; }
 
     /// <summary>
     /// Gets the optional agent identifier for correlation.
     /// </summary>
-    public string? AgentId { get; }
+    public Guid? AgentId { get; }
 
     /// <summary>
     /// Gets the optional turn identifier for correlation.
     /// </summary>
-    public string? TurnId { get; }
+    public Guid? TurnId { get; }
 
     /// <summary>
     /// Gets the optional operation identifier shared across related events.
     /// </summary>
-    public string? CorrelationId { get; }
+    public Guid? CorrelationId { get; }
 
     /// <summary>
     /// Gets the optional incremental text payload for streaming scenarios.
@@ -145,10 +145,10 @@ public sealed class ActivityLogEntry
         private string? _message;
         private DateTimeOffset _timestampUtc;
         private string? _sessionId;
-        private string? _conversationId;
-        private string? _agentId;
-        private string? _turnId;
-        private string? _correlationId;
+        private Guid? _conversationId;
+        private Guid? _agentId;
+        private Guid? _turnId;
+        private Guid? _correlationId;
         private string? _delta;
         private IReadOnlyDictionary<string, string>? _metadata;
 
@@ -227,7 +227,7 @@ public sealed class ActivityLogEntry
         /// <summary>
         /// Sets the optional conversation identifier.
         /// </summary>
-        public ActivityLogEntryBuilder WithConversationId(string? conversationId)
+        public ActivityLogEntryBuilder WithConversationId(Guid? conversationId)
         {
             _conversationId = conversationId;
             return this;
@@ -236,7 +236,7 @@ public sealed class ActivityLogEntry
         /// <summary>
         /// Sets the optional agent identifier.
         /// </summary>
-        public ActivityLogEntryBuilder WithAgentId(string? agentId)
+        public ActivityLogEntryBuilder WithAgentId(Guid? agentId)
         {
             _agentId = agentId;
             return this;
@@ -245,7 +245,7 @@ public sealed class ActivityLogEntry
         /// <summary>
         /// Sets the optional turn identifier.
         /// </summary>
-        public ActivityLogEntryBuilder WithTurnId(string? turnId)
+        public ActivityLogEntryBuilder WithTurnId(Guid? turnId)
         {
             _turnId = turnId;
             return this;
@@ -254,7 +254,7 @@ public sealed class ActivityLogEntry
         /// <summary>
         /// Sets the optional correlation identifier.
         /// </summary>
-        public ActivityLogEntryBuilder WithCorrelationId(string? correlationId)
+        public ActivityLogEntryBuilder WithCorrelationId(Guid? correlationId)
         {
             _correlationId = correlationId;
             return this;

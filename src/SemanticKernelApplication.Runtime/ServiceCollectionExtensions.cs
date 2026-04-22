@@ -14,20 +14,22 @@ public static class ServiceCollectionExtensions
 {
     public static IServiceCollection AddAgentWorkbenchRuntime(this IServiceCollection services)
     {
-        services.AddSingleton<InMemoryActivityLog>();
-        services.AddSingleton<IActivitySink>(provider => provider.GetRequiredService<InMemoryActivityLog>());
-        services.AddSingleton<IActivityStreamReader>(provider => provider.GetRequiredService<InMemoryActivityLog>());
-
-        services.AddSingleton<IAgentDefinitionStore, InMemoryAgentDefinitionStore>();
-        services.AddSingleton<IConversationStore, LocalConversationStore>();
-        services.AddSingleton<PlainTextAgentDefinitionFactory>();
-        services.AddSingleton<IAgentCreationService, AgentCreationService>();
         services.AddScoped<IConversationSessionAccessor, ConversationSessionAccessor>();
         services.AddScoped<IWorkbenchSnapshotFactory, WorkbenchSnapshotFactory>();
         services.AddScoped<ICoordinatorChatService, CoordinatorChatService>();
+        services.AddScoped<IAgentWorkbenchService, AgentWorkbenchService>();
+
+        services.AddSingleton<InMemoryActivityLog>();
+        services.AddSingleton<PlainTextAgentDefinitionFactory>();
+
+        services.AddSingleton<IAgentDefinitionStore, InMemoryAgentDefinitionStore>();
+        services.AddSingleton<IConversationStore, LocalConversationStore>();
+        services.AddSingleton<IAgentCreationService, AgentCreationService>();
         services.AddSingleton<IAgentExecutor, SemanticKernelAgentExecutor>();
         services.AddSingleton<ICoordinatorOrchestrator, SequentialCoordinatorOrchestrator>();
-        services.AddScoped<IAgentWorkbenchService, AgentWorkbenchService>();
+
+        services.AddSingleton<IActivitySink>(provider => provider.GetRequiredService<InMemoryActivityLog>());
+        services.AddSingleton<IActivityStreamReader>(provider => provider.GetRequiredService<InMemoryActivityLog>());
 
         return services;
     }

@@ -29,7 +29,7 @@ public sealed class SequentialCoordinatorOrchestrator : ICoordinatorOrchestrator
         var thread = request.Thread;
         var rounds = new List<CoordinationRound>();
         var summaries = new List<string>();
-        var turnId = request.Metadata?.GetValueOrDefault("turnId");
+        var turnId = TryGetGuid(request.Metadata, "turnId");
 
         await PublishAsync(ActivityKind.Workflow, ActivityStatus.Running, "Coordinator started", request.Objective, thread.ThreadId, cancellationToken);
 
@@ -88,10 +88,10 @@ public sealed class SequentialCoordinatorOrchestrator : ICoordinatorOrchestrator
                     ? $"{agentDefinition.Name} could not complete that step. Check the exceptions panel for details."
                     : executionResult.Output ?? executionResult.Summary ?? $"{agentDefinition.Name} completed.";
                 var message = ConversationMessage.Builder
-                    .WithMessageId(Guid.NewGuid().ToString("N"))
+                    .WithMessageId(Guid.NewGuid())
                     .WithThreadId(thread.ThreadId)
                     .WithRole(ConversationMessageRole.Assistant)
-                    .WithAuthorId(agentDefinition.Id)
+                    .WithAuthorId(agentDefinition.Id.ToString("N"))
                     .WithContent(content)
                     .WithCreatedAtUtc(DateTimeOffset.UtcNow)
                     .WithTurnId(turnId)
@@ -154,10 +154,10 @@ public sealed class SequentialCoordinatorOrchestrator : ICoordinatorOrchestrator
         ActivityStatus status,
         string title,
         string message,
-        string threadId,
+        Guid threadId,
         CancellationToken cancellationToken)
     {
-        return PublishAsync(kind, status, title, message, threadId, cancellationToken, agentId: null);
+        return PublishAsyncCore(kind, status, title, message, threadId, cancellationToken, agentId: null, failureReason: null, metadata: null);
     }
 
     private ValueTask PublishAsync(
@@ -165,9 +165,9 @@ public sealed class SequentialCoordinatorOrchestrator : ICoordinatorOrchestrator
         ActivityStatus status,
         string title,
         string message,
-        string threadId,
+        Guid threadId,
         CancellationToken cancellationToken,
-        string agentId)
+        Guid agentId)
     {
         return PublishAsyncCore(kind, status, title, message, threadId, cancellationToken, agentId, failureReason: null, metadata: null);
     }
@@ -177,9 +177,9 @@ public sealed class SequentialCoordinatorOrchestrator : ICoordinatorOrchestrator
         ActivityStatus status,
         string title,
         string message,
-        string threadId,
+        Guid threadId,
         CancellationToken cancellationToken,
-        string? agentId,
+        Guid? agentId,
         string? failureReason,
         IReadOnlyDictionary<string, string>? metadata)
     {
@@ -191,9 +191,9 @@ public sealed class SequentialCoordinatorOrchestrator : ICoordinatorOrchestrator
         ActivityStatus status,
         string title,
         string message,
-        string threadId,
+        Guid threadId,
         CancellationToken cancellationToken,
-        string? agentId,
+        Guid? agentId,
         string? failureReason,
         IReadOnlyDictionary<string, string>? metadata)
     {
@@ -219,7 +219,7 @@ public sealed class SequentialCoordinatorOrchestrator : ICoordinatorOrchestrator
 
         return _activitySink.PublishAsync(
             new ActivityStreamEnvelope(
-                threadId,
+                threadId.ToString("N"),
                 ActivityLogEntry.Builder
                     .WithSequence(0)
                     .WithKind(kind)
@@ -233,5 +233,15 @@ public sealed class SequentialCoordinatorOrchestrator : ICoordinatorOrchestrator
                     .WithMetadata(activityMetadata)
                     .Build()),
             cancellationToken);
+    }
+
+    private static Guid? TryGetGuid(IReadOnlyDictionary<string, string>? metadata, string key)
+    {
+        if (metadata is null || !metadata.TryGetValue(key, out var rawValue) || !Guid.TryParse(rawValue, out var value))
+        {
+            return null;
+        }
+
+        return value;
     }
 }

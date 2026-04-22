@@ -11,7 +11,7 @@ namespace SemanticKernelApplication.Abstractions.Workbench;
 /// <param name="Result">Underlying coordination result.</param>
 /// <param name="Activity">Activity entries produced while handling the message.</param>
 public sealed record CoordinatorChatResponse(
-    string ConversationId,
+    Guid ConversationId,
     string CoordinatorMessage,
     CoordinationResult Result,
     IReadOnlyList<ActivityLogEntry> Activity);

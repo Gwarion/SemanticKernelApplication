@@ -10,7 +10,7 @@ public sealed class AgentDefinition
 {
     [JsonConstructor]
     private AgentDefinition(
-        string id,
+        Guid id,
         string name,
         AgentKind kind,
         string description,
@@ -48,7 +48,7 @@ public sealed class AgentDefinition
     /// </summary>
     public static AgentDefinitionBuilder Builder => new();
 
-    public string Id { get; }
+    public Guid Id { get; }
     public string Name { get; }
     public AgentKind Kind { get; }
     public string Description { get; }
@@ -106,7 +106,7 @@ public sealed class AgentDefinition
     /// </summary>
     public sealed class AgentDefinitionBuilder
     {
-        private string? _id;
+        private Guid? _id;
         private string? _name;
         private AgentKind? _kind;
         private string? _description;
@@ -120,7 +120,7 @@ public sealed class AgentDefinition
         private DateTimeOffset? _createdAtUtc;
         private DateTimeOffset? _updatedAtUtc;
 
-        public AgentDefinitionBuilder WithId(string id) { _id = id; return this; }
+        public AgentDefinitionBuilder WithId(Guid id) { _id = id; return this; }
         public AgentDefinitionBuilder WithName(string name) { _name = name; return this; }
         public AgentDefinitionBuilder WithKind(AgentKind kind) { _kind = kind; return this; }
         public AgentDefinitionBuilder WithDescription(string description) { _description = description; return this; }
@@ -136,14 +136,14 @@ public sealed class AgentDefinition
 
         public AgentDefinition Build()
         {
-            if (string.IsNullOrWhiteSpace(_id)) throw new InvalidOperationException("Agent id is required.");
+            if (_id is null || _id == Guid.Empty) throw new InvalidOperationException("Agent id is required.");
             if (string.IsNullOrWhiteSpace(_name)) throw new InvalidOperationException("Agent name is required.");
             if (_kind is null) throw new InvalidOperationException("Agent kind is required.");
             if (string.IsNullOrWhiteSpace(_description)) throw new InvalidOperationException("Agent description is required.");
             if (_instructions is null) throw new InvalidOperationException("Agent instructions are required.");
 
             return new AgentDefinition(
-                _id,
+                _id.Value,
                 _name,
                 _kind.Value,
                 _description,

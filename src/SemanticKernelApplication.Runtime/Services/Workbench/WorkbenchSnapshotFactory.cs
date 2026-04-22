@@ -42,12 +42,10 @@ public sealed class WorkbenchSnapshotFactory : IWorkbenchSnapshotFactory
     public async Task<WorkbenchSnapshot> GetWorkbenchSnapshotAsync(string? conversationId = null, CancellationToken cancellationToken = default)
     {
         var agents = await _agentDefinitionStore.ListAsync(cancellationToken);
-        var effectiveConversationId = string.IsNullOrWhiteSpace(conversationId)
-            ? _conversationSessionAccessor.ActiveConversationId
-            : conversationId;
+        var effectiveConversationId = TryParseConversationId(conversationId) ?? _conversationSessionAccessor.ActiveConversationId;
         var conversation = effectiveConversationId is null
             ? null
-            : await _conversationStore.GetAsync(effectiveConversationId, cancellationToken);
+            : await _conversationStore.GetAsync(effectiveConversationId.Value, cancellationToken);
 
         return new WorkbenchSnapshot(
             agents,
@@ -59,8 +57,13 @@ public sealed class WorkbenchSnapshotFactory : IWorkbenchSnapshotFactory
             _activityLog.GetRecent(80));
     }
 
-    public void SetActiveConversation(string? conversationId)
+    public void SetActiveConversation(Guid? conversationId)
     {
         _conversationSessionAccessor.ActiveConversationId = conversationId;
     }
+
+    private static Guid? TryParseConversationId(string? conversationId) =>
+        Guid.TryParse(conversationId, out var parsedConversationId)
+            ? parsedConversationId
+            : null;
 }

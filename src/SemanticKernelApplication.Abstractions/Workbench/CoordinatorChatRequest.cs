@@ -7,4 +7,4 @@ namespace SemanticKernelApplication.Abstractions.Workbench;
 /// <param name="ConversationId">Optional active conversation identifier.</param>
 public sealed record CoordinatorChatRequest(
     string Message,
-    string? ConversationId = null);
+    Guid? ConversationId = null);

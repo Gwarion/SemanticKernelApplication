@@ -5,9 +5,9 @@ namespace SemanticKernelApplication.Runtime.Services;
 
 public sealed class InMemoryConversationStore : IConversationStore
 {
-    private readonly ConcurrentDictionary<string, ConversationThread> _threads = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<Guid, ConversationThread> _threads = [];
 
-    public Task<ConversationThread?> GetAsync(string threadId, CancellationToken cancellationToken = default)
+    public Task<ConversationThread?> GetAsync(Guid threadId, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
         _threads.TryGetValue(threadId, out var thread);

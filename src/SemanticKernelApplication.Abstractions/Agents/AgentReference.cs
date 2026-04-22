@@ -8,7 +8,7 @@ namespace SemanticKernelApplication.Abstractions.Agents;
 /// <param name="Kind">Broad classification of the agent.</param>
 /// <param name="Metadata">Optional contextual metadata.</param>
 public sealed record AgentReference(
-    string AgentId,
+    Guid AgentId,
     string DisplayName,
     AgentKind Kind,
     IReadOnlyDictionary<string, string>? Metadata = null);

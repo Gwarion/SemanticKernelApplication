@@ -33,7 +33,7 @@ public sealed class PlainTextAgentDefinitionFactory
             .Build();
 
         return AgentDefinition.Builder
-            .WithId(Guid.NewGuid().ToString("N"))
+            .WithId(Guid.NewGuid())
             .WithName(name)
             .WithKind(AgentKind.UserDefined)
             .WithDescription(role)

@@ -9,8 +9,8 @@ public sealed class ConversationTurn
 {
     [JsonConstructor]
     private ConversationTurn(
-        string turnId,
-        string threadId,
+        Guid turnId,
+        Guid threadId,
         int sequence,
         string initiatedByParticipantId,
         DateTimeOffset startedAtUtc,
@@ -30,8 +30,8 @@ public sealed class ConversationTurn
 
     public static ConversationTurnBuilder Builder => new();
 
-    public string TurnId { get; }
-    public string ThreadId { get; }
+    public Guid TurnId { get; }
+    public Guid ThreadId { get; }
     public int Sequence { get; }
     public string InitiatedByParticipantId { get; }
     public DateTimeOffset StartedAtUtc { get; }
@@ -52,8 +52,8 @@ public sealed class ConversationTurn
 
     public sealed class ConversationTurnBuilder
     {
-        private string? _turnId;
-        private string? _threadId;
+        private Guid? _turnId;
+        private Guid? _threadId;
         private int? _sequence;
         private string? _initiatedByParticipantId;
         private DateTimeOffset _startedAtUtc;
@@ -61,8 +61,8 @@ public sealed class ConversationTurn
         private string? _goal;
         private IReadOnlyDictionary<string, string>? _metadata;
 
-        public ConversationTurnBuilder WithTurnId(string turnId) { _turnId = turnId; return this; }
-        public ConversationTurnBuilder WithThreadId(string threadId) { _threadId = threadId; return this; }
+        public ConversationTurnBuilder WithTurnId(Guid turnId) { _turnId = turnId; return this; }
+        public ConversationTurnBuilder WithThreadId(Guid threadId) { _threadId = threadId; return this; }
         public ConversationTurnBuilder WithSequence(int sequence) { _sequence = sequence; return this; }
         public ConversationTurnBuilder WithInitiatedByParticipantId(string initiatedByParticipantId) { _initiatedByParticipantId = initiatedByParticipantId; return this; }
         public ConversationTurnBuilder WithStartedAtUtc(DateTimeOffset startedAtUtc) { _startedAtUtc = startedAtUtc; return this; }
@@ -72,13 +72,13 @@ public sealed class ConversationTurn
 
         public ConversationTurn Build()
         {
-            if (string.IsNullOrWhiteSpace(_turnId)) throw new InvalidOperationException("Turn id is required.");
-            if (string.IsNullOrWhiteSpace(_threadId)) throw new InvalidOperationException("Thread id is required.");
+            if (_turnId is null || _turnId == Guid.Empty) throw new InvalidOperationException("Turn id is required.");
+            if (_threadId is null || _threadId == Guid.Empty) throw new InvalidOperationException("Thread id is required.");
             if (_sequence is null) throw new InvalidOperationException("Turn sequence is required.");
             if (string.IsNullOrWhiteSpace(_initiatedByParticipantId)) throw new InvalidOperationException("Initiator is required.");
             if (_startedAtUtc == default) throw new InvalidOperationException("Start timestamp is required.");
 
-            return new ConversationTurn(_turnId, _threadId, _sequence.Value, _initiatedByParticipantId, _startedAtUtc, _completedAtUtc, _goal, _metadata);
+            return new ConversationTurn(_turnId.Value, _threadId.Value, _sequence.Value, _initiatedByParticipantId, _startedAtUtc, _completedAtUtc, _goal, _metadata);
         }
     }
 }

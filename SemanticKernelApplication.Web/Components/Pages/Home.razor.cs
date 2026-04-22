@@ -27,7 +27,7 @@ public partial class Home : IAsyncDisposable
     private string NewWorkspacePathInput { get; set; } = string.Empty;
     private string ActiveWorkspacePath { get; set; } = string.Empty;
     private string ApiKeyInput { get; set; } = string.Empty;
-    private string? ActiveConversationId { get; set; }
+    private Guid? ActiveConversationId { get; set; }
     private string? SelectedProviderId { get; set; }
     private string? SelectedModelId { get; set; }
     private bool ApiKeyConfigured { get; set; }
@@ -115,17 +115,18 @@ public partial class Home : IAsyncDisposable
             "startActivityStream",
             _objectReference,
             "/api/activity/stream?replay=30");
-        ActiveConversationId = await _module.InvokeAsync<string?>("getActiveConversationId");
-        if (!string.IsNullOrWhiteSpace(ActiveConversationId))
+        var activeConversationId = await _module.InvokeAsync<string?>("getActiveConversationId");
+        if (Guid.TryParse(activeConversationId, out var parsedConversationId))
         {
+            ActiveConversationId = parsedConversationId;
             await RefreshSnapshotAsync(ActiveConversationId);
             await InvokeAsync(StateHasChanged);
         }
     }
 
-    private async Task RefreshSnapshotAsync(string? conversationId = null)
+    private async Task RefreshSnapshotAsync(Guid? conversationId = null)
     {
-        var snapshot = await Workbench.GetSnapshotAsync(conversationId);
+        var snapshot = await Workbench.GetSnapshotAsync(conversationId?.ToString("N"));
         Agents = snapshot.Agents.ToList();
         Providers = snapshot.Providers.ToList();
         KnownWorkspacePaths = snapshot.KnownWorkspacePaths.ToList();
@@ -263,7 +264,7 @@ public partial class Home : IAsyncDisposable
             ActiveConversationId = response.ConversationId;
             if (_module is not null)
             {
-                await _module.InvokeVoidAsync("setActiveConversationId", ActiveConversationId);
+                await _module.InvokeVoidAsync("setActiveConversationId", ActiveConversationId?.ToString("N"));
             }
             Messages = response.Result.Thread.Messages.OrderBy(message => message.CreatedAtUtc).ToList();
             MergeActivity(response.Activity.Select(ToViewModel));
@@ -392,7 +393,7 @@ public partial class Home : IAsyncDisposable
         {
             "user" => "You",
             "coordinator" => "Coordinator",
-            _ => Agents.FirstOrDefault(agent => agent.Id == authorId)?.Name ?? authorId
+            _ => Agents.FirstOrDefault(agent => string.Equals(agent.Id.ToString("N"), authorId, StringComparison.OrdinalIgnoreCase))?.Name ?? authorId
         };
     }
 

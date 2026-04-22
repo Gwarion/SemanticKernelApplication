@@ -24,7 +24,7 @@ public sealed class RuntimeActivityBridgeHostedService : BackgroundService
             await _activityEventStream.PublishAsync(
                 new ActivityEvent(
                     Type: envelope.Entry.Kind.ToString(),
-                    Source: envelope.Entry.AgentId ?? envelope.Entry.Title,
+                    Source: envelope.Entry.AgentId?.ToString("N") ?? envelope.Entry.Title,
                     ActivityId: envelope.Entry.Sequence.ToString(),
                     Stream: envelope.StreamId,
                     Message: envelope.Entry.Message,
@@ -41,9 +41,9 @@ public sealed class RuntimeActivityBridgeHostedService : BackgroundService
             ["title"] = entry.Title,
             ["severity"] = entry.Severity.ToString(),
             ["activityKind"] = entry.Kind.ToString(),
-            ["agentId"] = entry.AgentId,
-            ["conversationId"] = entry.ConversationId,
-            ["turnId"] = entry.TurnId,
+            ["agentId"] = entry.AgentId?.ToString("N"),
+            ["conversationId"] = entry.ConversationId?.ToString("N"),
+            ["turnId"] = entry.TurnId?.ToString("N"),
             ["delta"] = entry.Delta
         };
 
