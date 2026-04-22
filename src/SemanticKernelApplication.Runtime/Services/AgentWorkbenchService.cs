@@ -33,8 +33,8 @@ public sealed class AgentWorkbenchService : IAgentWorkbenchService
         _providerSessionConfiguration = providerSessionConfiguration;
     }
 
-    public Task<WorkbenchSnapshot> GetSnapshotAsync(CancellationToken cancellationToken = default) =>
-        _snapshotFactory.CreateAsync(cancellationToken);
+    public Task<WorkbenchSnapshot> GetSnapshotAsync(string? conversationId = null, CancellationToken cancellationToken = default) =>
+        _snapshotFactory.CreateAsync(conversationId, cancellationToken);
 
     public Task<AgentDefinition> CreateAgentFromTextAsync(
         PlainTextAgentCreationRequest request,

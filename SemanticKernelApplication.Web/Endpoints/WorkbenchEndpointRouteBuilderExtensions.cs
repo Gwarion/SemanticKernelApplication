@@ -25,7 +25,7 @@ public static class WorkbenchEndpointRouteBuilderExtensions
     private static Task<Ok<WorkbenchSnapshot>> GetSnapshotAsync(
         IAgentWorkbenchService service,
         CancellationToken cancellationToken)
-        => GetOkAsync(service.GetSnapshotAsync(cancellationToken));
+        => GetOkAsync(service.GetSnapshotAsync(cancellationToken: cancellationToken));
 
     private static Task<Ok<AgentDefinition>> CreateAgentAsync(
         PlainTextAgentCreationRequest request,

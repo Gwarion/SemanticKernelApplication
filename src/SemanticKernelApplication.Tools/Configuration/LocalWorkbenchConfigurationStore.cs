@@ -11,7 +11,11 @@ public interface ILocalWorkbenchConfigurationStore
 
     AgentProviderRegistration? GetProvider(string? providerId);
 
+    IReadOnlyList<string> GetKnownWorkspacePaths();
+
     GlobalModelConfiguration GetGlobalModelConfiguration();
+
+    string? GetApiKey(string? providerId);
 
     string GetWorkspacePath();
 
@@ -67,6 +71,7 @@ public sealed class LocalWorkbenchConfigurationStore : ILocalWorkbenchConfigurat
     private readonly string _defaultWorkspacePath;
 
     private List<AgentProviderRegistration> _providers = [];
+    private List<string> _knownWorkspacePaths = [];
     private string _workspacePath = string.Empty;
     private string _selectedProviderId = string.Empty;
     private string _selectedModelId = string.Empty;
@@ -109,6 +114,27 @@ public sealed class LocalWorkbenchConfigurationStore : ILocalWorkbenchConfigurat
         }
     }
 
+    public IReadOnlyList<string> GetKnownWorkspacePaths()
+    {
+        lock (_lock)
+        {
+            return _knownWorkspacePaths.ToArray();
+        }
+    }
+
+    public string? GetApiKey(string? providerId)
+    {
+        if (string.IsNullOrWhiteSpace(providerId))
+        {
+            return null;
+        }
+
+        lock (_lock)
+        {
+            return _apiKeys.GetValueOrDefault(providerId.Trim());
+        }
+    }
+
     public string GetWorkspacePath()
     {
         lock (_lock)
@@ -125,6 +151,8 @@ public sealed class LocalWorkbenchConfigurationStore : ILocalWorkbenchConfigurat
         {
             _workspacePath = normalized;
             using var connection = OpenConnection();
+            UpsertKnownWorkspace(connection, normalized);
+            LoadKnownWorkspacePaths(connection);
             UpsertWorkbenchConfiguration(connection);
             return _workspacePath;
         }
@@ -179,6 +207,8 @@ public sealed class LocalWorkbenchConfigurationStore : ILocalWorkbenchConfigurat
             SeedCatalog(connection);
             LoadProviders(connection);
             LoadConfiguration(connection);
+            UpsertKnownWorkspace(connection, _workspacePath);
+            LoadKnownWorkspacePaths(connection);
         }
     }
 
@@ -242,6 +272,11 @@ public sealed class LocalWorkbenchConfigurationStore : ILocalWorkbenchConfigurat
                 workspace_path TEXT NOT NULL,
                 selected_provider_id TEXT NOT NULL,
                 selected_model_id TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS known_workspaces (
+                workspace_path TEXT NOT NULL PRIMARY KEY,
+                last_used_utc TEXT NOT NULL
             );
 
             CREATE TABLE IF NOT EXISTS provider_api_keys (
@@ -417,6 +452,34 @@ public sealed class LocalWorkbenchConfigurationStore : ILocalWorkbenchConfigurat
         UpsertWorkbenchConfiguration(connection);
     }
 
+    private void LoadKnownWorkspacePaths(SqliteConnection connection)
+    {
+        var workspacePaths = new List<string>();
+
+        using var command = connection.CreateCommand();
+        command.CommandText =
+            """
+            SELECT workspace_path
+            FROM known_workspaces
+            ORDER BY last_used_utc DESC, workspace_path;
+            """;
+
+        using var reader = command.ExecuteReader();
+        while (reader.Read())
+        {
+            workspacePaths.Add(reader.GetString(0));
+        }
+
+        if (workspacePaths.All(path => !string.Equals(path, _workspacePath, StringComparison.OrdinalIgnoreCase)))
+        {
+            workspacePaths.Insert(0, _workspacePath);
+        }
+
+        _knownWorkspacePaths = workspacePaths
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
     private void EnsureSelectionExists()
     {
         var provider = _providers.FirstOrDefault(item => string.Equals(item.Id, _selectedProviderId, StringComparison.OrdinalIgnoreCase))
@@ -446,6 +509,21 @@ public sealed class LocalWorkbenchConfigurationStore : ILocalWorkbenchConfigurat
         command.Parameters.AddWithValue("$workspacePath", _workspacePath);
         command.Parameters.AddWithValue("$selectedProviderId", _selectedProviderId);
         command.Parameters.AddWithValue("$selectedModelId", _selectedModelId);
+        command.ExecuteNonQuery();
+    }
+
+    private static void UpsertKnownWorkspace(SqliteConnection connection, string workspacePath)
+    {
+        using var command = connection.CreateCommand();
+        command.CommandText =
+            """
+            INSERT INTO known_workspaces (workspace_path, last_used_utc)
+            VALUES ($workspacePath, $lastUsedUtc)
+            ON CONFLICT(workspace_path) DO UPDATE SET
+                last_used_utc = excluded.last_used_utc;
+            """;
+        command.Parameters.AddWithValue("$workspacePath", workspacePath);
+        command.Parameters.AddWithValue("$lastUsedUtc", DateTimeOffset.UtcNow.ToString("O"));
         command.ExecuteNonQuery();
     }
 

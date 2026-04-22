@@ -3,6 +3,7 @@ using SemanticKernelApplication.Abstractions.Agents;
 using SemanticKernelApplication.Abstractions.Conversations;
 using SemanticKernelApplication.Abstractions.Orchestration;
 using SemanticKernelApplication.Abstractions.Workbench;
+using SemanticKernelApplication.Abstractions.Providers;
 using SemanticKernelApplication.Runtime.Services.Agents;
 using SemanticKernelApplication.Tools.Providers;
 
@@ -16,6 +17,7 @@ public sealed class CoordinatorChatService : ICoordinatorChatService
     private readonly IAgentDefinitionStore _agentDefinitionStore;
     private readonly IConversationStore _conversationStore;
     private readonly ICoordinatorOrchestrator _orchestrator;
+    private readonly IAgentExecutor _agentExecutor;
     private readonly IActivitySink _activitySink;
     private readonly InMemoryActivityLog _activityLog;
     private readonly IProviderSessionConfiguration _providerSessionConfiguration;
@@ -26,6 +28,7 @@ public sealed class CoordinatorChatService : ICoordinatorChatService
         IAgentDefinitionStore agentDefinitionStore,
         IConversationStore conversationStore,
         ICoordinatorOrchestrator orchestrator,
+        IAgentExecutor agentExecutor,
         IActivitySink activitySink,
         InMemoryActivityLog activityLog,
         IProviderSessionConfiguration providerSessionConfiguration,
@@ -35,6 +38,7 @@ public sealed class CoordinatorChatService : ICoordinatorChatService
         _agentDefinitionStore = agentDefinitionStore;
         _conversationStore = conversationStore;
         _orchestrator = orchestrator;
+        _agentExecutor = agentExecutor;
         _activitySink = activitySink;
         _activityLog = activityLog;
         _providerSessionConfiguration = providerSessionConfiguration;
@@ -52,18 +56,20 @@ public sealed class CoordinatorChatService : ICoordinatorChatService
 
         var trimmedMessage = request.Message.Trim();
         var thread = await GetOrCreateConversationAsync(request.ConversationId, cancellationToken);
-        var userMessage = CreateMessage(thread.ThreadId, ConversationMessageRole.User, "user", trimmedMessage);
+        var turn = CreateTurn(thread, "user", trimmedMessage);
+        var userMessage = CreateMessage(thread.ThreadId, ConversationMessageRole.User, "user", trimmedMessage, turn.TurnId);
 
         if (CoordinatorIntentParser.TryExtractAgentDescription(trimmedMessage, out var agentDescription))
         {
-            return await HandleAgentCreationAsync(thread, userMessage, agentDescription, cancellationToken);
+            return await HandleAgentCreationAsync(thread, turn, userMessage, agentDescription, cancellationToken);
         }
 
-        return await HandleCoordinationAsync(thread, userMessage, trimmedMessage, cancellationToken);
+        return await HandleCoordinationAsync(thread, turn, userMessage, trimmedMessage, cancellationToken);
     }
 
     private async Task<CoordinatorChatResponse> HandleAgentCreationAsync(
         ConversationThread thread,
+        ConversationTurn turn,
         ConversationMessage userMessage,
         string agentDescription,
         CancellationToken cancellationToken)
@@ -74,10 +80,10 @@ public sealed class CoordinatorChatService : ICoordinatorChatService
         var configuration = _providerSessionConfiguration.GetConfiguration();
 
         var replyText =
-            $"I created {agent.Name} and added it to the agent studio. It will participate using the current global model setting ({configuration.SelectedProviderId} / {configuration.SelectedModelId}).";
-        var replyMessage = CreateMessage(thread.ThreadId, ConversationMessageRole.Assistant, CoordinatorId, replyText);
+            $"I created {agent.Name} and added it to the agent studio. It will use {configuration.SelectedProviderId} / {configuration.SelectedModelId}, and you can start delegating work to it right away.";
+        var replyMessage = CreateMessage(thread.ThreadId, ConversationMessageRole.Assistant, CoordinatorId, replyText, turn.TurnId, userMessage.MessageId);
         var participantThread = EnsureAgentParticipant(thread, agent);
-        var updatedThread = await SaveThreadAsync(participantThread, [userMessage, replyMessage], cancellationToken);
+        var updatedThread = await SaveThreadAsync(participantThread, turn, [userMessage, replyMessage], cancellationToken);
 
         await _activitySink.PublishAsync(
             new ActivityStreamEnvelope(
@@ -109,11 +115,12 @@ public sealed class CoordinatorChatService : ICoordinatorChatService
 
     private async Task<CoordinatorChatResponse> HandleCoordinationAsync(
         ConversationThread thread,
+        ConversationTurn turn,
         ConversationMessage userMessage,
         string trimmedMessage,
         CancellationToken cancellationToken)
     {
-        var savedThread = await SaveThreadAsync(thread, [userMessage], cancellationToken);
+        var savedThread = await SaveThreadAsync(thread, turn, [userMessage], cancellationToken);
 
         await _activitySink.PublishAsync(
             new ActivityStreamEnvelope(
@@ -138,17 +145,21 @@ public sealed class CoordinatorChatService : ICoordinatorChatService
             new AgentInstructionSet("Coordinate agents and summarize their visible progress for the user."));
 
         var result = await _orchestrator.ExecuteAsync(
-            new CoordinationRequest(
-                Guid.NewGuid().ToString("N"),
-                coordinator,
-                savedThread,
-                agents.Select(agent => new AgentReference(agent.Id, agent.Name, agent.Kind)).ToArray(),
-                trimmedMessage),
+                new CoordinationRequest(
+                    Guid.NewGuid().ToString("N"),
+                    coordinator,
+                    savedThread,
+                    agents.Select(agent => new AgentReference(agent.Id, agent.Name, agent.Kind)).ToArray(),
+                    trimmedMessage,
+                    Metadata: new Dictionary<string, string>
+                    {
+                        ["turnId"] = turn.TurnId
+                    }),
             cancellationToken);
 
-        var replyText = BuildCoordinatorSummary(result);
-        var replyMessage = CreateMessage(result.Thread.ThreadId, ConversationMessageRole.Assistant, CoordinatorId, replyText);
-        var updatedThread = await SaveThreadAsync(result.Thread, [replyMessage], cancellationToken);
+        var replyText = await BuildCoordinatorReplyAsync(savedThread, result, trimmedMessage, cancellationToken);
+        var replyMessage = CreateMessage(result.Thread.ThreadId, ConversationMessageRole.Assistant, CoordinatorId, replyText, turn.TurnId, userMessage.MessageId);
+        var updatedThread = await SaveThreadAsync(result.Thread, turn with { CompletedAtUtc = DateTimeOffset.UtcNow }, [replyMessage], cancellationToken);
 
         await _activitySink.PublishAsync(
             new ActivityStreamEnvelope(
@@ -185,7 +196,7 @@ public sealed class CoordinatorChatService : ICoordinatorChatService
             }
         }
 
-        var snapshot = await _snapshotFactory.CreateAsync(cancellationToken);
+        var snapshot = await _snapshotFactory.CreateAsync(conversationId, cancellationToken);
         if (snapshot.ActiveConversation is not null)
         {
             return snapshot.ActiveConversation;
@@ -218,11 +229,13 @@ public sealed class CoordinatorChatService : ICoordinatorChatService
 
     private async Task<ConversationThread> SaveThreadAsync(
         ConversationThread thread,
+        ConversationTurn turn,
         IReadOnlyList<ConversationMessage> newMessages,
         CancellationToken cancellationToken)
     {
         var updatedThread = thread with
         {
+            Turns = UpsertTurn(thread.Turns, turn),
             Messages = [.. thread.Messages, .. newMessages],
             UpdatedAtUtc = DateTimeOffset.UtcNow
         };
@@ -232,11 +245,30 @@ public sealed class CoordinatorChatService : ICoordinatorChatService
         return updatedThread;
     }
 
+    private static ConversationTurn CreateTurn(ConversationThread thread, string initiatedByParticipantId, string goal)
+    {
+        return new ConversationTurn(
+            Guid.NewGuid().ToString("N"),
+            thread.ThreadId,
+            thread.Turns.Count + 1,
+            initiatedByParticipantId,
+            DateTimeOffset.UtcNow,
+            Goal: goal);
+    }
+
+    private static IReadOnlyList<ConversationTurn> UpsertTurn(IReadOnlyList<ConversationTurn> existingTurns, ConversationTurn turn)
+    {
+        var remainingTurns = existingTurns.Where(item => !string.Equals(item.TurnId, turn.TurnId, StringComparison.Ordinal)).ToArray();
+        return [.. remainingTurns, turn];
+    }
+
     private static ConversationMessage CreateMessage(
         string threadId,
         ConversationMessageRole role,
         string authorId,
-        string content)
+        string content,
+        string? turnId = null,
+        string? parentMessageId = null)
     {
         return new ConversationMessage(
             Guid.NewGuid().ToString("N"),
@@ -244,7 +276,9 @@ public sealed class CoordinatorChatService : ICoordinatorChatService
             role,
             authorId,
             content,
-            DateTimeOffset.UtcNow);
+            DateTimeOffset.UtcNow,
+            turnId,
+            parentMessageId);
     }
 
     private static ConversationThread EnsureAgentParticipant(ConversationThread thread, AgentDefinition agent)
@@ -264,24 +298,54 @@ public sealed class CoordinatorChatService : ICoordinatorChatService
         };
     }
 
-    private static string BuildCoordinatorSummary(CoordinationResult result)
+    private async Task<string> BuildCoordinatorReplyAsync(
+        ConversationThread thread,
+        CoordinationResult result,
+        string userMessage,
+        CancellationToken cancellationToken)
     {
         if (result.Rounds.Count == 0)
         {
             return "No specialists were available. Create an agent from the studio panel and I'll route future work through it.";
         }
 
-        var latestMessages = result.Rounds
+        var recentConversation = thread.Messages
+            .TakeLast(8)
+            .Select(message => $"{ResolveParticipantName(thread, message.AuthorId)}: {message.Content}");
+
+        var specialistUpdates = result.Rounds
             .SelectMany(round => round.Messages)
-            .TakeLast(4)
-            .Select(message => $"- {message.AuthorId}: {message.Content}");
+            .TakeLast(6)
+            .Select(message => $"- {ResolveParticipantName(result.Thread, message.AuthorId)}: {message.Content}");
 
-        return $$"""
-            I coordinated the current bench and collected the latest visible progress:
-            {{string.Join(Environment.NewLine, latestMessages)}}
+        var coordinatorRequest = new AgentExecutionRequest(
+            Guid.NewGuid().ToString("N"),
+            new AgentReference(CoordinatorId, "Coordinator", AgentKind.Coordinator),
+            $$"""
+            User request:
+            {{userMessage}}
 
-            Summary:
-            {{result.Summary ?? "The specialists completed their pass."}}
-            """;
+            Specialist updates:
+            {{string.Join(Environment.NewLine, specialistUpdates)}}
+
+            Write a direct assistant reply to the user. Be concise, conversational, and action-oriented. Do not expose internal ids or debug formatting.
+            """,
+            thread.ThreadId,
+            Metadata: new Dictionary<string, string>
+            {
+                ["systemPrompt"] = "You are the coordinator. Reply as a real chat assistant who delegates work to specialists and explains outcomes in plain English.",
+                ["conversationHistory"] = string.Join(Environment.NewLine, recentConversation)
+            });
+
+        var coordinatorResult = await _agentExecutor.ExecuteAsync(coordinatorRequest, cancellationToken);
+        return string.IsNullOrWhiteSpace(coordinatorResult.Output)
+            ? result.Summary ?? "The specialists completed their pass."
+            : coordinatorResult.Output;
+    }
+
+    private static string ResolveParticipantName(ConversationThread thread, string authorId)
+    {
+        return thread.Participants.FirstOrDefault(participant => participant.ParticipantId == authorId)?.DisplayName
+            ?? authorId;
     }
 }

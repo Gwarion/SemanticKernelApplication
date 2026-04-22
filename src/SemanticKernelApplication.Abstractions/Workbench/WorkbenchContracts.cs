@@ -38,12 +38,13 @@ public sealed record WorkbenchSnapshot(
     IReadOnlyList<ModelProviderDefinition> Providers,
     GlobalModelConfiguration ModelConfiguration,
     string WorkspacePath,
+    IReadOnlyList<string> KnownWorkspacePaths,
     ConversationThread? ActiveConversation,
     IReadOnlyList<ActivityLogEntry> RecentActivity);
 
 public interface IAgentWorkbenchService
 {
-    Task<WorkbenchSnapshot> GetSnapshotAsync(CancellationToken cancellationToken = default);
+    Task<WorkbenchSnapshot> GetSnapshotAsync(string? conversationId = null, CancellationToken cancellationToken = default);
 
     Task<AgentDefinition> CreateAgentFromTextAsync(
         PlainTextAgentCreationRequest request,

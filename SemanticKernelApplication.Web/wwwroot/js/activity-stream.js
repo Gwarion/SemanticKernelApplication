@@ -15,3 +15,18 @@ export function startActivityStream(dotNetRef, url) {
         }
     };
 }
+
+const conversationKey = "agent-workbench-active-conversation";
+
+export function getActiveConversationId() {
+    return sessionStorage.getItem(conversationKey);
+}
+
+export function setActiveConversationId(conversationId) {
+    if (!conversationId) {
+        sessionStorage.removeItem(conversationKey);
+        return;
+    }
+
+    sessionStorage.setItem(conversationKey, conversationId);
+}

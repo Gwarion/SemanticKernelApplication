@@ -19,14 +19,15 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IActivityStreamReader>(provider => provider.GetRequiredService<InMemoryActivityLog>());
 
         services.AddSingleton<IAgentDefinitionStore, InMemoryAgentDefinitionStore>();
-        services.AddSingleton<IConversationStore, InMemoryConversationStore>();
+        services.AddSingleton<IConversationStore, LocalConversationStore>();
         services.AddSingleton<PlainTextAgentDefinitionFactory>();
         services.AddSingleton<IAgentCreationService, AgentCreationService>();
-        services.AddSingleton<IWorkbenchSnapshotFactory, WorkbenchSnapshotFactory>();
-        services.AddSingleton<ICoordinatorChatService, CoordinatorChatService>();
+        services.AddScoped<IConversationSessionAccessor, ConversationSessionAccessor>();
+        services.AddScoped<IWorkbenchSnapshotFactory, WorkbenchSnapshotFactory>();
+        services.AddScoped<ICoordinatorChatService, CoordinatorChatService>();
         services.AddSingleton<IAgentExecutor, SemanticKernelAgentExecutor>();
         services.AddSingleton<ICoordinatorOrchestrator, SequentialCoordinatorOrchestrator>();
-        services.AddSingleton<IAgentWorkbenchService, AgentWorkbenchService>();
+        services.AddScoped<IAgentWorkbenchService, AgentWorkbenchService>();
 
         return services;
     }

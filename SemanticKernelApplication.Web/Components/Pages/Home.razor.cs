@@ -18,10 +18,12 @@ public partial class Home : IAsyncDisposable
 
     private List<AgentDefinition> Agents { get; set; } = [];
     private List<ModelProviderDefinition> Providers { get; set; } = [];
+    private List<string> KnownWorkspacePaths { get; set; } = [];
     private List<ConversationMessage> Messages { get; set; } = [];
     private string ChatMessage { get; set; } = string.Empty;
     private string AgentDescription { get; set; } = string.Empty;
     private string WorkspacePathInput { get; set; } = string.Empty;
+    private string NewWorkspacePathInput { get; set; } = string.Empty;
     private string ActiveWorkspacePath { get; set; } = string.Empty;
     private string ApiKeyInput { get; set; } = string.Empty;
     private string SetupFeedback { get; set; } = string.Empty;
@@ -42,13 +44,18 @@ public partial class Home : IAsyncDisposable
         && !string.IsNullOrWhiteSpace(WorkspacePathInput)
         && !string.Equals(WorkspacePathInput.Trim(), ActiveWorkspacePath, StringComparison.Ordinal);
 
+    private bool CanAddWorkspace =>
+        !IsWorkspaceBusy
+        && !string.IsNullOrWhiteSpace(NewWorkspacePathInput);
+
     private bool CanApplyModel =>
         !IsModelBusy
         && !string.IsNullOrWhiteSpace(SelectedProviderId)
         && !string.IsNullOrWhiteSpace(SelectedModelId);
 
     private IEnumerable<string> WorkspaceSuggestions =>
-        new[] { ActiveWorkspacePath, WorkspacePathInput }
+        KnownWorkspacePaths
+            .Concat(new[] { ActiveWorkspacePath, WorkspacePathInput, NewWorkspacePathInput })
             .Where(path => !string.IsNullOrWhiteSpace(path))
             .Select(path => path.Trim())
             .Distinct(StringComparer.Ordinal);
@@ -88,17 +95,26 @@ public partial class Home : IAsyncDisposable
             "startActivityStream",
             _objectReference,
             "/api/activity/stream?replay=30");
+        ActiveConversationId = await _module.InvokeAsync<string?>("getActiveConversationId");
+        if (!string.IsNullOrWhiteSpace(ActiveConversationId))
+        {
+            await RefreshSnapshotAsync(ActiveConversationId);
+            await InvokeAsync(StateHasChanged);
+        }
     }
 
-    private async Task RefreshSnapshotAsync()
+    private async Task RefreshSnapshotAsync(string? conversationId = null)
     {
-        var snapshot = await Workbench.GetSnapshotAsync();
+        var snapshot = await Workbench.GetSnapshotAsync(conversationId);
         Agents = snapshot.Agents.ToList();
         Providers = snapshot.Providers.ToList();
+        KnownWorkspacePaths = snapshot.KnownWorkspacePaths.ToList();
         ActiveWorkspacePath = snapshot.WorkspacePath;
-        WorkspacePathInput = string.IsNullOrWhiteSpace(WorkspacePathInput)
-            ? snapshot.WorkspacePath
-            : WorkspacePathInput;
+        if (string.IsNullOrWhiteSpace(WorkspacePathInput)
+            || KnownWorkspacePaths.All(path => !string.Equals(path, WorkspacePathInput, StringComparison.OrdinalIgnoreCase)))
+        {
+            WorkspacePathInput = snapshot.WorkspacePath;
+        }
         SelectedProviderId = snapshot.ModelConfiguration.SelectedProviderId;
         SelectedModelId = snapshot.ModelConfiguration.SelectedModelId;
         ApiKeyConfigured = snapshot.ModelConfiguration.ApiKeyConfigured;
@@ -135,6 +151,23 @@ public partial class Home : IAsyncDisposable
         }
     }
 
+    private async Task AddWorkspaceAsync()
+    {
+        if (!CanAddWorkspace)
+        {
+            return;
+        }
+
+        WorkspacePathInput = NewWorkspacePathInput.Trim();
+        await ApplyWorkspaceAsync();
+
+        if (string.Equals(ActiveWorkspacePath, WorkspacePathInput, StringComparison.OrdinalIgnoreCase))
+        {
+            NewWorkspacePathInput = string.Empty;
+            SetupFeedback = "Workspace added to the saved list and selected for the current bench.";
+        }
+    }
+
     private async Task ApplyModelAsync()
     {
         if (!CanApplyModel)
@@ -153,7 +186,7 @@ public partial class Home : IAsyncDisposable
             SelectedModelId = configuration.SelectedModelId;
             ApiKeyConfigured = configuration.ApiKeyConfigured;
             ApiKeyInput = configuration.ApiKey ?? string.Empty;
-            SetupFeedback = "Global model settings were saved locally for the next app launch.";
+            SetupFeedback = "Provider settings were saved locally. You can override this key any time from the setup form.";
             await RefreshSnapshotAsync();
         }
         catch (Exception ex)
@@ -201,6 +234,10 @@ public partial class Home : IAsyncDisposable
             var response = await Workbench.SendCoordinatorMessageAsync(
                 new CoordinatorChatRequest(ChatMessage.Trim(), ActiveConversationId));
             ActiveConversationId = response.ConversationId;
+            if (_module is not null)
+            {
+                await _module.InvokeVoidAsync("setActiveConversationId", ActiveConversationId);
+            }
             Messages = response.Result.Thread.Messages.OrderBy(message => message.CreatedAtUtc).ToList();
             MergeActivity(response.Activity.Select(ToViewModel));
             ChatMessage = string.Empty;
@@ -243,11 +280,11 @@ public partial class Home : IAsyncDisposable
     private void OnProviderChanged(ChangeEventArgs args)
     {
         SelectedProviderId = args.Value?.ToString();
-        SelectedModelId = Providers
-            .FirstOrDefault(provider => provider.Id == SelectedProviderId)?
-            .Models
-            .FirstOrDefault(model => model.IsDefault)?.Id
-            ?? Providers.FirstOrDefault(provider => provider.Id == SelectedProviderId)?.Models.FirstOrDefault()?.Id;
+        var provider = Providers.FirstOrDefault(item => item.Id == SelectedProviderId);
+        SelectedModelId = provider?.Models.FirstOrDefault(model => model.IsDefault)?.Id
+            ?? provider?.Models.FirstOrDefault()?.Id;
+        ApiKeyInput = provider?.SavedApiKey ?? string.Empty;
+        ApiKeyConfigured = !string.IsNullOrWhiteSpace(provider?.SavedApiKey);
     }
 
     private void MergeActivity(IEnumerable<ActivityViewModel> events)

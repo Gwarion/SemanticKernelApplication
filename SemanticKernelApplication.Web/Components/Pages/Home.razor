@@ -4,55 +4,48 @@
 <PageTitle>Agent Workbench</PageTitle>
 
 <div class="workbench">
-    <section class="hero-card">
-        <div>
-            <p class="eyebrow">Coordinator-driven agent studio</p>
-            <h2>Talk to one coordinator, let it create specialists from natural language, and follow the workbench in plain English.</h2>
-        </div>
-
-        <div class="hero-stats">
-            <article>
-                <span>@Agents.Count</span>
-                <small>Agents</small>
-            </article>
-            <article>
-                <span>@Providers.Count</span>
-                <small>Providers</small>
-            </article>
-            <article>
-                <span>@Providers.SelectMany(provider => provider.Models).Count()</span>
-                <small>Models</small>
-            </article>
-        </div>
-    </section>
-
     <section class="setup-card">
-        <div class="setup-copy">
-            <p class="panel-label">Setup</p>
-            <h3>Pick one workspace, one provider, one model, and keep the last-used config locally.</h3>
-            <p>The app now reloads the last saved workspace, provider, model, and API key from a local database on startup.</p>
+        <div class="setup-header">
+            <div>
+                <p class="panel-label">Setup</p>
+                <h3>Saved local configuration</h3>
+            </div>
+            <div class="setup-stats">
+                <span>@Agents.Count agents</span>
+                <span>@Providers.Count providers</span>
+                <span>@KnownWorkspacePaths.Count workspaces</span>
+            </div>
         </div>
 
         <div class="setup-grid">
             <div class="setup-field">
-                <label for="workspace-path">Workspace folder</label>
+                <label for="workspace-path">Saved workspace</label>
                 <div class="setup-row">
-                    <input id="workspace-path"
-                           list="workspace-path-suggestions"
-                           @bind="WorkspacePathInput"
-                           @bind:event="oninput"
-                           placeholder="C:\Projects\SemanticKernelApplication" />
+                    <select id="workspace-path" @bind="WorkspacePathInput">
+                        @foreach (var workspacePath in WorkspaceSuggestions)
+                        {
+                            <option value="@workspacePath">@workspacePath</option>
+                        }
+                    </select>
                     <button class="primary-button" @onclick="ApplyWorkspaceAsync" disabled="@(!CanApplyWorkspace)">
-                        @(IsWorkspaceBusy ? "Applying..." : "Apply")
+                        @(IsWorkspaceBusy ? "Applying..." : "Use")
                     </button>
                 </div>
-                <datalist id="workspace-path-suggestions">
-                    @foreach (var suggestion in WorkspaceSuggestions)
-                    {
-                        <option value="@suggestion"></option>
-                    }
-                </datalist>
                 <small>Active: @ActiveWorkspacePath</small>
+            </div>
+
+            <div class="setup-field">
+                <label for="new-workspace-path">Add workspace</label>
+                <div class="setup-row">
+                    <input id="new-workspace-path"
+                           @bind="NewWorkspacePathInput"
+                           @bind:event="oninput"
+                           placeholder="C:\Projects\AnotherWorkspace" />
+                    <button class="primary-button" @onclick="AddWorkspaceAsync" disabled="@(!CanAddWorkspace)">
+                        @(IsWorkspaceBusy ? "Adding..." : "Add")
+                    </button>
+                </div>
+                <small>Adds the folder to the saved workspace list and selects it immediately.</small>
             </div>
 
             <div class="setup-field">
@@ -83,13 +76,13 @@
             </div>
 
             <div class="setup-field">
-                <label for="api-key">API key for the selected provider</label>
+                <label for="api-key">Override API key</label>
                 <input id="api-key"
                        type="password"
                        @bind="ApiKeyInput"
                        @bind:event="oninput"
                        placeholder="Paste a key for the selected provider" />
-                <small>@(ApiKeyConfigured ? "A saved key is loaded for the current provider." : "No saved key is loaded for the current provider.")</small>
+                <small>@(ApiKeyConfigured ? "A saved key is loaded for this provider. Saving will override it." : "No saved key is loaded for this provider yet.")</small>
             </div>
         </div>
 
@@ -99,12 +92,12 @@
         }
     </section>
 
-    <section class="workbench-grid">
+    <section class="main-grid">
         <div class="panel chat-panel">
             <div class="panel-header">
                 <div>
                     <p class="panel-label">Coordinator chat</p>
-                    <h3>Ask for work or tell the coordinator to create a new agent</h3>
+                    <h3>Ask for work, create agents, and continue the same conversation</h3>
                 </div>
             </div>
 
@@ -142,103 +135,17 @@
             </div>
         </div>
 
-        <div class="panel output-panel">
-            <div class="panel-header">
-                <div>
-                    <p class="panel-label">Live output</p>
-                    <h3>Public progress only</h3>
-                </div>
-            </div>
-
-            <div class="activity-stream">
-                @if (!ProgressFeed.Any())
-                {
-                    <div class="empty-state">
-                        <strong>No activity yet</strong>
-                        <p>Runtime events will appear here as the coordinator receives work and agents respond.</p>
-                    </div>
-                }
-                else
-                {
-                    @foreach (var entry in ProgressFeed)
-                    {
-                        <article class="activity-entry">
-                            <div class="activity-header">
-                                <strong>@entry.Title</strong>
-                                <span>@entry.Timestamp.ToLocalTime().ToString("HH:mm:ss")</span>
-                            </div>
-                            <p>@entry.Message</p>
-                        </article>
-                    }
-                }
-            </div>
-        </div>
-
-        <div class="panel exception-panel">
-            <div class="panel-header">
-                <div>
-                    <p class="panel-label">Exceptions</p>
-                    <h3>Agent and tool failures</h3>
-                </div>
-            </div>
-
-            <div class="activity-stream">
-                @if (!ExceptionFeed.Any())
-                {
-                    <div class="empty-state">
-                        <strong>No failures captured</strong>
-                        <p>If an agent run or tool invocation fails, the underlying reason will appear here.</p>
-                    </div>
-                }
-                else
-                {
-                    @foreach (var entry in ExceptionFeed)
-                    {
-                        <article class="activity-entry activity-entry-error">
-                            <div class="activity-header">
-                                <strong>@entry.Title</strong>
-                                <span>@entry.Timestamp.ToLocalTime().ToString("HH:mm:ss")</span>
-                            </div>
-                            <p>@entry.Message</p>
-                            @if (!string.IsNullOrWhiteSpace(entry.ProviderId) || !string.IsNullOrWhiteSpace(entry.ModelId))
-                            {
-                                <p class="activity-meta">
-                                    Provider: @entry.ProviderId (@entry.ProviderKind)
-                                    @if (!string.IsNullOrWhiteSpace(entry.ModelId))
-                                    {
-                                        <span> | Model: @entry.ModelId</span>
-                                    }
-                                </p>
-                            }
-                            @if (!string.IsNullOrWhiteSpace(entry.ExceptionType) || !string.IsNullOrWhiteSpace(entry.ExceptionMessage))
-                            {
-                                <p class="activity-detail">@entry.ExceptionType: @entry.ExceptionMessage</p>
-                            }
-                            @if (!string.IsNullOrWhiteSpace(entry.Details))
-                            {
-                                <p class="activity-detail">@entry.Details</p>
-                            }
-                            @if (!string.IsNullOrWhiteSpace(entry.ExceptionDetails))
-                            {
-                                <pre class="activity-trace">@entry.ExceptionDetails</pre>
-                            }
-                        </article>
-                    }
-                }
-            </div>
-        </div>
-
         <div class="panel studio-panel">
             <div class="panel-header">
                 <div>
                     <p class="panel-label">Agent studio</p>
-                    <h3>Created specialists appear here automatically</h3>
+                    <h3>Simple specialist list</h3>
                 </div>
             </div>
 
             <div class="studio-form">
                 <label for="agent-description">Create directly from the studio if needed</label>
-                <textarea id="agent-description" rows="5" @bind="AgentDescription" placeholder="Example: A frontend specialist that critiques mobile layouts and interaction flow."></textarea>
+                <textarea id="agent-description" rows="4" @bind="AgentDescription" placeholder="Example: A frontend specialist that critiques mobile layouts and interaction flow."></textarea>
                 <button class="primary-button" @onclick="CreateAgentAsync" disabled="@IsBusy">Create agent</button>
             </div>
 
@@ -260,11 +167,101 @@
                                 <span>@CurrentModelLabel</span>
                             </div>
                             <p class="agent-role">@agent.Description</p>
-                            <p class="agent-prompt">@agent.Instructions.SystemPrompt</p>
                         </article>
                     }
                 }
             </div>
         </div>
     </section>
+
+    <details class="diagnostics-shell">
+        <summary>Diagnostics and agent stream</summary>
+        <section class="diagnostics-grid">
+            <div class="panel output-panel">
+                <div class="panel-header">
+                    <div>
+                        <p class="panel-label">Agent stream</p>
+                        <h3>Relevant coordinator and specialist updates</h3>
+                    </div>
+                </div>
+
+                <div class="activity-stream">
+                    @if (!ProgressFeed.Any())
+                    {
+                        <div class="empty-state">
+                            <strong>No activity yet</strong>
+                            <p>Runtime events will appear here as the coordinator receives work and agents respond.</p>
+                        </div>
+                    }
+                    else
+                    {
+                        @foreach (var entry in ProgressFeed)
+                        {
+                            <article class="activity-entry">
+                                <div class="activity-header">
+                                    <strong>@entry.Title</strong>
+                                    <span>@entry.Timestamp.ToLocalTime().ToString("HH:mm:ss")</span>
+                                </div>
+                                <p>@entry.Message</p>
+                            </article>
+                        }
+                    }
+                </div>
+            </div>
+
+            <div class="panel exception-panel">
+                <div class="panel-header">
+                    <div>
+                        <p class="panel-label">Debug</p>
+                        <h3>Error details and stack traces</h3>
+                    </div>
+                </div>
+
+                <div class="activity-stream">
+                    @if (!ExceptionFeed.Any())
+                    {
+                        <div class="empty-state">
+                            <strong>No failures captured</strong>
+                            <p>If an agent run or tool invocation fails, the underlying reason will appear here.</p>
+                        </div>
+                    }
+                    else
+                    {
+                        @foreach (var entry in ExceptionFeed)
+                        {
+                            <article class="activity-entry activity-entry-error">
+                                <div class="activity-header">
+                                    <strong>@entry.Title</strong>
+                                    <span>@entry.Timestamp.ToLocalTime().ToString("HH:mm:ss")</span>
+                                </div>
+                                <p>@entry.Message</p>
+                                @if (!string.IsNullOrWhiteSpace(entry.ProviderId) || !string.IsNullOrWhiteSpace(entry.ModelId))
+                                {
+                                    <p class="activity-meta">
+                                        Provider: @entry.ProviderId (@entry.ProviderKind)
+                                        @if (!string.IsNullOrWhiteSpace(entry.ModelId))
+                                        {
+                                            <span> | Model: @entry.ModelId</span>
+                                        }
+                                    </p>
+                                }
+                                @if (!string.IsNullOrWhiteSpace(entry.ExceptionType) || !string.IsNullOrWhiteSpace(entry.ExceptionMessage))
+                                {
+                                    <p class="activity-detail">@entry.ExceptionType: @entry.ExceptionMessage</p>
+                                }
+                                @if (!string.IsNullOrWhiteSpace(entry.Details))
+                                {
+                                    <p class="activity-detail">@entry.Details</p>
+                                }
+                                @if (!string.IsNullOrWhiteSpace(entry.ExceptionDetails))
+                                {
+                                    <pre class="activity-trace">@entry.ExceptionDetails</pre>
+                                }
+                            </article>
+                        }
+                    }
+                </div>
+            </div>
+        </section>
+    </details>
 </div>

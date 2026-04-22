@@ -22,5 +22,6 @@ public sealed record ModelProviderDefinition(
     IReadOnlyList<ModelDefinition> Models,
     string SelectedModelId,
     bool IsConfigured,
+    string? SavedApiKey = null,
     bool IsDefault = false,
     IReadOnlyDictionary<string, string>? Metadata = null);

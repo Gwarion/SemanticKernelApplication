@@ -57,6 +57,7 @@ public sealed class SemanticKernelAgentExecutor : IAgentExecutor
 
             var chat = kernel.GetRequiredService<IChatCompletionService>();
             var history = new ChatHistory(BuildSystemPrompt(request));
+            AppendConversationHistory(history, request.Metadata?.GetValueOrDefault("conversationHistory"));
             history.AddUserMessage(request.Input);
             var executionSettings = CreateExecutionSettings(registration);
 
@@ -171,14 +172,36 @@ public sealed class SemanticKernelAgentExecutor : IAgentExecutor
 
     private static string BuildSystemPrompt(AgentExecutionRequest request)
     {
+        if (request.Metadata?.TryGetValue("systemPrompt", out var systemPromptOverride) == true
+            && !string.IsNullOrWhiteSpace(systemPromptOverride))
+        {
+            return systemPromptOverride;
+        }
+
         var agentDescription = request.Metadata?.GetValueOrDefault("agentDescription") ?? request.Agent.DisplayName;
+        var agentSystemPrompt = request.Metadata?.GetValueOrDefault("agentSystemPrompt");
         return $"""
             You are {request.Agent.DisplayName}.
             Public role description: {agentDescription}
+            {agentSystemPrompt}
             When a task requires workspace changes, file edits, or command execution, use the available tools instead of only describing what you would do.
             Keep all tool usage constrained to the configured workspace.
             Respond with useful, concise output suitable for a shared team activity panel.
             Do not reveal hidden chain-of-thought. Summarize your reasoning briefly and focus on next steps.
             """;
+    }
+
+    private static void AppendConversationHistory(ChatHistory history, string? conversationHistory)
+    {
+        if (string.IsNullOrWhiteSpace(conversationHistory))
+        {
+            return;
+        }
+
+        history.AddSystemMessage(
+            $$"""
+            Recent conversation context:
+            {{conversationHistory}}
+            """);
     }
 }

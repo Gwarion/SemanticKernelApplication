@@ -29,6 +29,7 @@ public sealed class SequentialCoordinatorOrchestrator : ICoordinatorOrchestrator
         var thread = request.Thread;
         var rounds = new List<CoordinationRound>();
         var summaries = new List<string>();
+        var turnId = request.Metadata?.GetValueOrDefault("turnId");
 
         await PublishAsync(ActivityKind.Workflow, ActivityStatus.Running, "Coordinator started", request.Objective, thread.ThreadId, cancellationToken);
 
@@ -67,7 +68,11 @@ public sealed class SequentialCoordinatorOrchestrator : ICoordinatorOrchestrator
                     Metadata: new Dictionary<string, string>
                     {
                         ["agentDescription"] = agentDefinition.Description,
-                        ["providerId"] = agentDefinition.ProviderId ?? string.Empty
+                        ["providerId"] = agentDefinition.ProviderId ?? string.Empty,
+                        ["agentSystemPrompt"] = agentDefinition.Instructions.SystemPrompt,
+                        ["conversationHistory"] = string.Join(
+                            Environment.NewLine,
+                            thread.Messages.TakeLast(10).Select(message => $"{ResolveParticipantName(thread, message.AuthorId)}: {message.Content}"))
                     });
 
                 var executionResult = await _agentExecutor.ExecuteAsync(executionRequest, cancellationToken);
@@ -80,7 +85,8 @@ public sealed class SequentialCoordinatorOrchestrator : ICoordinatorOrchestrator
                     ConversationMessageRole.Assistant,
                     agentDefinition.Id,
                     content,
-                    DateTimeOffset.UtcNow);
+                    DateTimeOffset.UtcNow,
+                    turnId);
 
                 roundMessages.Add(message);
                 summaries.Add($"{agentDefinition.Name}: {executionResult.Summary ?? executionResult.Output}");
@@ -125,6 +131,12 @@ public sealed class SequentialCoordinatorOrchestrator : ICoordinatorOrchestrator
             rounds,
             summary,
             "Completed");
+    }
+
+    private static string ResolveParticipantName(ConversationThread thread, string authorId)
+    {
+        return thread.Participants.FirstOrDefault(participant => participant.ParticipantId == authorId)?.DisplayName
+            ?? authorId;
     }
 
     private ValueTask PublishAsync(

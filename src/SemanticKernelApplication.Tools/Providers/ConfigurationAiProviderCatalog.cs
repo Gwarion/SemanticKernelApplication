@@ -42,6 +42,7 @@ public sealed class ConfigurationAiProviderCatalog : IAiProviderCatalog
         var selectedModelId = isSelected
             ? configuration.SelectedModelId
             : provider.Models.FirstOrDefault(model => model.IsDefault)?.Id ?? provider.Models.First().Id;
+        var savedApiKey = _configurationStore.GetApiKey(provider.Id);
 
         var models = provider.Models
             .Select(model => new ModelDefinition(model.Id, model.DisplayName, model.IsDefault))
@@ -53,7 +54,8 @@ public sealed class ConfigurationAiProviderCatalog : IAiProviderCatalog
             provider.Kind,
             models,
             selectedModelId,
-            isSelected && configuration.ApiKeyConfigured,
+            !string.IsNullOrWhiteSpace(savedApiKey),
+            savedApiKey,
             provider.IsDefault);
     }
 }
