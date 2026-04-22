@@ -2,10 +2,13 @@
 
   <ItemGroup>
     <ProjectReference Include="..\SemanticKernelApplication.Abstractions\SemanticKernelApplication.Abstractions.csproj" />
+    <ProjectReference Include="..\SemanticKernelApplication.Runtime\SemanticKernelApplication.Runtime.csproj" />
+    <ProjectReference Include="..\SemanticKernelApplication.Tools\SemanticKernelApplication.Tools.csproj" />
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.SemanticKernel" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
     <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" />
   </ItemGroup>
 

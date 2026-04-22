@@ -1,6 +1,7 @@
 <Solution>
   <Folder Name="/src/">
     <Project Path="src/SemanticKernelApplication.Abstractions/SemanticKernelApplication.Abstractions.csproj" />
+    <Project Path="src/SemanticKernelApplication.Persistence/SemanticKernelApplication.Persistence.csproj" />
     <Project Path="src/SemanticKernelApplication.Runtime/SemanticKernelApplication.Runtime.csproj" />
     <Project Path="src/SemanticKernelApplication.Tools/SemanticKernelApplication.Tools.csproj" />
   </Folder>

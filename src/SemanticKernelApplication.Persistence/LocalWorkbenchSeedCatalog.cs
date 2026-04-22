@@ -1,13 +1,11 @@
 using SemanticKernelApplication.Abstractions.Providers;
+using SemanticKernelApplication.Tools.Configuration;
 
-namespace SemanticKernelApplication.Tools.Configuration;
+namespace SemanticKernelApplication.Persistence;
 
-/// <summary>
-/// Provides the built-in provider catalog used to seed the local configuration database.
-/// </summary>
 internal static class LocalWorkbenchSeedCatalog
 {
-    internal static IReadOnlyList<AgentProviderRegistration> Providers { get; } =
+    public static IReadOnlyList<AgentProviderRegistration> Providers { get; } =
     [
         new AgentProviderRegistration
         {

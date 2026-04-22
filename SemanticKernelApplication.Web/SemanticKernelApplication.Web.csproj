@@ -2,6 +2,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\src\SemanticKernelApplication.Abstractions\SemanticKernelApplication.Abstractions.csproj" />
+    <ProjectReference Include="..\src\SemanticKernelApplication.Persistence\SemanticKernelApplication.Persistence.csproj" />
     <ProjectReference Include="..\src\SemanticKernelApplication.Runtime\SemanticKernelApplication.Runtime.csproj" />
     <ProjectReference Include="..\src\SemanticKernelApplication.Tools\SemanticKernelApplication.Tools.csproj" />
   </ItemGroup>

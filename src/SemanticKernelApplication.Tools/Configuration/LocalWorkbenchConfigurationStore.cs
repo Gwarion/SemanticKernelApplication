@@ -1,4 +1,3 @@
-using Microsoft.Extensions.Options;
 using SemanticKernelApplication.Abstractions.Workbench;
 
 namespace SemanticKernelApplication.Tools.Configuration;
@@ -9,41 +8,39 @@ namespace SemanticKernelApplication.Tools.Configuration;
 public sealed class LocalWorkbenchConfigurationStore : ILocalWorkbenchConfigurationStore
 {
     private readonly Lock _lock = new();
-    private readonly LocalWorkbenchConfigurationRepository _repository;
-    private readonly LocalWorkbenchConfigurationState _state;
+    private readonly ILocalWorkbenchConfigurationRepository _repository;
+    private LocalWorkbenchConfigurationRecord _configuration;
 
     public LocalWorkbenchConfigurationStore(
-        IOptions<LocalWorkbenchStoreOptions> storeOptions,
-        IOptions<WorkspaceToolOptions> workspaceOptions)
+        ILocalWorkbenchConfigurationRepository repository,
+        WorkspaceToolOptions workspaceOptions)
     {
-        var databasePath = ResolveDatabasePath(storeOptions.Value.DatabasePath);
-        var defaultWorkspacePath = NormalizeWorkspace(workspaceOptions.Value.RootPath);
-        _repository = new LocalWorkbenchConfigurationRepository(databasePath);
-        _state = _repository.LoadState(defaultWorkspacePath, LocalWorkbenchSeedCatalog.Providers);
+        _repository = repository;
+        _configuration = _repository.Load(NormalizeWorkspace(workspaceOptions.RootPath));
     }
 
     public IReadOnlyList<AgentProviderRegistration> GetProviders()
     {
         lock (_lock)
-            return _state.Providers.ToArray();
+            return _configuration.Providers.ToArray();
     }
 
     public AgentProviderRegistration? GetProvider(string? providerId)
     {
         lock (_lock)
-            return _state.GetProvider(providerId);
+            return _configuration.GetProvider(providerId);
     }
 
     public IReadOnlyList<string> GetKnownWorkspacePaths()
     {
         lock (_lock)
-            return _state.KnownWorkspacePaths.ToArray();
+            return _configuration.KnownWorkspacePaths.ToArray();
     }
 
     public GlobalModelConfiguration GetGlobalModelConfiguration()
     {
         lock (_lock)
-            return _state.BuildGlobalModelConfiguration();
+            return _configuration.ToGlobalModelConfiguration();
     }
 
     public string? GetApiKey(string? providerId)
@@ -52,13 +49,13 @@ public sealed class LocalWorkbenchConfigurationStore : ILocalWorkbenchConfigurat
             return null;
 
         lock (_lock)
-            return _state.ApiKeys.GetValueOrDefault(providerId.Trim());
+            return _configuration.ApiKeys.GetValueOrDefault(providerId.Trim());
     }
 
     public string GetWorkspacePath()
     {
         lock (_lock)
-            return _state.WorkspacePath;
+            return _configuration.WorkspacePath;
     }
 
     public string SetWorkspacePath(string workspacePath)
@@ -67,8 +64,8 @@ public sealed class LocalWorkbenchConfigurationStore : ILocalWorkbenchConfigurat
 
         lock (_lock)
         {
-            _repository.PersistWorkspace(_state, normalizedWorkspace);
-            return _state.WorkspacePath;
+            _configuration = _repository.SaveWorkspace(_configuration, normalizedWorkspace);
+            return _configuration.WorkspacePath;
         }
     }
 
@@ -79,22 +76,14 @@ public sealed class LocalWorkbenchConfigurationStore : ILocalWorkbenchConfigurat
 
         lock (_lock)
         {
-            var provider = _state.Providers.FirstOrDefault(item => string.Equals(item.Id, request.SelectedProviderId, StringComparison.OrdinalIgnoreCase))
+            var provider = _configuration.Providers.FirstOrDefault(item => string.Equals(item.Id, request.SelectedProviderId, StringComparison.OrdinalIgnoreCase))
                 ?? throw new InvalidOperationException($"Provider '{request.SelectedProviderId}' was not found.");
             var model = provider.Models.FirstOrDefault(item => string.Equals(item.Id, request.SelectedModelId, StringComparison.OrdinalIgnoreCase))
                 ?? throw new InvalidOperationException($"Model '{request.SelectedModelId}' was not found for provider '{provider.DisplayName}'.");
 
-            _repository.PersistGlobalConfiguration(_state, provider.Id, model.Id, request.ApiKey);
-            return _state.BuildGlobalModelConfiguration();
+            _configuration = _repository.SaveGlobalModelConfiguration(_configuration, provider.Id, model.Id, request.ApiKey);
+            return _configuration.ToGlobalModelConfiguration();
         }
-    }
-
-    internal static string ResolveDatabasePath(string databasePath)
-    {
-        var candidate = string.IsNullOrWhiteSpace(databasePath)
-            ? ".appdata\\workbench.db"
-            : databasePath.Trim();
-        return Path.GetFullPath(candidate);
     }
 
     internal static string NormalizeWorkspace(string workspacePath)

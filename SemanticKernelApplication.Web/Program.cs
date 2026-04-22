@@ -1,5 +1,6 @@
 using SemanticKernelApplication.Web.Components;
 using Microsoft.AspNetCore.DataProtection;
+using SemanticKernelApplication.Persistence;
 using SemanticKernelApplication.Runtime;
 using SemanticKernelApplication.Tools;
 using SemanticKernelApplication.Web.Endpoints;
@@ -19,6 +20,7 @@ builder.Services.AddRazorComponents()
 builder.Services.AddDataProtection()
     .PersistKeysToFileSystem(new DirectoryInfo(dataProtectionDirectory));
 builder.Services.AddActivityStreaming();
+builder.Services.AddLocalPersistence(builder.Configuration);
 builder.Services.AddWorkspaceTools(builder.Configuration);
 builder.Services.AddAgentWorkbenchRuntime();
 builder.Services.AddHostedService<RuntimeActivityBridgeHostedService>();
