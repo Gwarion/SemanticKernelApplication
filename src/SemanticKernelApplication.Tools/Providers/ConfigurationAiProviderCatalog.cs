@@ -48,14 +48,15 @@ public sealed class ConfigurationAiProviderCatalog : IAiProviderCatalog
             .Select(model => new ModelDefinition(model.Id, model.DisplayName, model.IsDefault))
             .ToArray();
 
-        return new ModelProviderDefinition(
-            provider.Id,
-            provider.DisplayName,
-            provider.Kind,
-            models,
-            selectedModelId,
-            !string.IsNullOrWhiteSpace(savedApiKey),
-            savedApiKey,
-            provider.IsDefault);
+        return ModelProviderDefinition.Builder
+            .WithId(provider.Id)
+            .WithDisplayName(provider.DisplayName)
+            .WithKind(provider.Kind)
+            .WithModels(models)
+            .WithSelectedModelId(selectedModelId)
+            .WithConfigured(!string.IsNullOrWhiteSpace(savedApiKey))
+            .WithSavedApiKey(savedApiKey)
+            .WithDefault(provider.IsDefault)
+            .Build();
     }
 }

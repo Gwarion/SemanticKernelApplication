@@ -21,11 +21,11 @@ public sealed class InMemoryActivityLog : IActivitySink, IActivityStreamReader
 
     public async ValueTask PublishAsync(ActivityStreamEnvelope envelope, CancellationToken cancellationToken = default)
     {
-        var entry = envelope.Entry with
-        {
-            Sequence = Interlocked.Increment(ref _sequence),
-            TimestampUtc = envelope.Entry.TimestampUtc == default ? DateTimeOffset.UtcNow : envelope.Entry.TimestampUtc
-        };
+        var entry = envelope.Entry
+            .ToBuilder()
+            .WithSequence(Interlocked.Increment(ref _sequence))
+            .WithTimestampUtc(envelope.Entry.TimestampUtc == default ? DateTimeOffset.UtcNow : envelope.Entry.TimestampUtc)
+            .Build();
 
         var normalized = envelope with { Entry = entry };
         _history.Enqueue(normalized);

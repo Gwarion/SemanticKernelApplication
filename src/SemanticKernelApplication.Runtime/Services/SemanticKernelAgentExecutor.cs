@@ -70,13 +70,14 @@ public sealed class SemanticKernelAgentExecutor : IAgentExecutor
                 ? $"Agent {request.Agent.DisplayName} completed without a visible message."
                 : response.Content;
 
-            return new AgentExecutionResult(
-                request.OperationId,
-                AgentExecutionStatus.Completed,
-                text,
-                $"Completed by {request.Agent.DisplayName}",
-                StartedAtUtc: startedAt,
-                CompletedAtUtc: DateTimeOffset.UtcNow);
+            return AgentExecutionResult.Builder
+                .WithOperationId(request.OperationId)
+                .WithStatus(AgentExecutionStatus.Completed)
+                .WithOutput(text)
+                .WithSummary($"Completed by {request.Agent.DisplayName}")
+                .WithStartedAtUtc(startedAt)
+                .WithCompletedAtUtc(DateTimeOffset.UtcNow)
+                .Build();
         }
         catch (Exception exception)
         {
@@ -90,14 +91,15 @@ public sealed class SemanticKernelAgentExecutor : IAgentExecutor
                 ["exceptionDetails"] = exception.ToString()
             };
 
-            return new AgentExecutionResult(
-                request.OperationId,
-                AgentExecutionStatus.Failed,
-                Summary: $"Execution failed for {request.Agent.DisplayName}",
-                Metadata: failureDetails,
-                StartedAtUtc: startedAt,
-                CompletedAtUtc: DateTimeOffset.UtcNow,
-                FailureReason: $"{exception.GetType().Name}: {exception.Message}");
+            return AgentExecutionResult.Builder
+                .WithOperationId(request.OperationId)
+                .WithStatus(AgentExecutionStatus.Failed)
+                .WithSummary($"Execution failed for {request.Agent.DisplayName}")
+                .WithMetadata(failureDetails)
+                .WithStartedAtUtc(startedAt)
+                .WithCompletedAtUtc(DateTimeOffset.UtcNow)
+                .WithFailureReason($"{exception.GetType().Name}: {exception.Message}")
+                .Build();
         }
     }
 
@@ -161,13 +163,14 @@ public sealed class SemanticKernelAgentExecutor : IAgentExecutor
             Result: {{summary}}
             """;
 
-        return new AgentExecutionResult(
-            request.OperationId,
-            AgentExecutionStatus.Completed,
-            output,
-            summary,
-            StartedAtUtc: startedAt,
-            CompletedAtUtc: DateTimeOffset.UtcNow);
+        return AgentExecutionResult.Builder
+            .WithOperationId(request.OperationId)
+            .WithStatus(AgentExecutionStatus.Completed)
+            .WithOutput(output)
+            .WithSummary(summary)
+            .WithStartedAtUtc(startedAt)
+            .WithCompletedAtUtc(DateTimeOffset.UtcNow)
+            .Build();
     }
 
     private static string BuildSystemPrompt(AgentExecutionRequest request)

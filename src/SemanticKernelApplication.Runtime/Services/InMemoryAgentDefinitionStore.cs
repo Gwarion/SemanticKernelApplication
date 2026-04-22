@@ -29,12 +29,12 @@ public sealed class InMemoryAgentDefinitionStore : IAgentDefinitionStore
         cancellationToken.ThrowIfCancellationRequested();
 
         var now = DateTimeOffset.UtcNow;
-        var normalized = definition with
-        {
-            Id = string.IsNullOrWhiteSpace(definition.Id) ? Guid.NewGuid().ToString("N") : definition.Id,
-            CreatedAtUtc = definition.CreatedAtUtc ?? now,
-            UpdatedAtUtc = now
-        };
+        var normalized = definition
+            .ToBuilder()
+            .WithId(string.IsNullOrWhiteSpace(definition.Id) ? Guid.NewGuid().ToString("N") : definition.Id)
+            .WithCreatedAtUtc(definition.CreatedAtUtc ?? now)
+            .WithUpdatedAtUtc(now)
+            .Build();
 
         _agents[normalized.Id] = normalized;
         return Task.FromResult(normalized);

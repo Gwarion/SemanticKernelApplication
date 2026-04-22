@@ -35,16 +35,17 @@ public sealed class AgentCreationService : IAgentCreationService
         await _activitySink.PublishAsync(
             new ActivityStreamEnvelope(
                 "workbench",
-                new ActivityLogEntry(
-                    0,
-                    ActivityKind.Status,
-                    ActivityStatus.Completed,
-                    ActivitySeverity.Information,
-                    "Agent created",
-                    $"{definition.Name} is ready for coordinator assignments.",
-                    DateTimeOffset.UtcNow,
-                    AgentId: definition.Id,
-                    Metadata: new Dictionary<string, string> { ["providerId"] = definition.ProviderId ?? string.Empty })),
+                ActivityLogEntry.Builder
+                    .WithSequence(0)
+                    .WithKind(ActivityKind.Status)
+                    .WithStatus(ActivityStatus.Completed)
+                    .WithSeverity(ActivitySeverity.Information)
+                    .WithTitle("Agent created")
+                    .WithMessage($"{definition.Name} is ready for coordinator assignments.")
+                    .WithTimestampUtc(DateTimeOffset.UtcNow)
+                    .WithAgentId(definition.Id)
+                    .WithMetadata(new Dictionary<string, string> { ["providerId"] = definition.ProviderId ?? string.Empty })
+                    .Build()),
             cancellationToken);
 
         return definition;

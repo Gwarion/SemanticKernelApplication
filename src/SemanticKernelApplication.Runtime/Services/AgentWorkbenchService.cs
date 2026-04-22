@@ -34,7 +34,7 @@ public sealed class AgentWorkbenchService : IAgentWorkbenchService
     }
 
     public Task<WorkbenchSnapshot> GetSnapshotAsync(string? conversationId = null, CancellationToken cancellationToken = default) =>
-        _snapshotFactory.CreateAsync(conversationId, cancellationToken);
+        _snapshotFactory.GetWorkbenchSnapshotAsync(conversationId, cancellationToken);
 
     public Task<AgentDefinition> CreateAgentFromTextAsync(
         PlainTextAgentCreationRequest request,
@@ -55,15 +55,16 @@ public sealed class AgentWorkbenchService : IAgentWorkbenchService
         await _activitySink.PublishAsync(
             new ActivityStreamEnvelope(
                 "workbench",
-                new ActivityLogEntry(
-                    0,
-                    ActivityKind.Status,
-                    ActivityStatus.Completed,
-                    ActivitySeverity.Information,
-                    "Workspace updated",
-                    $"Agent tool execution is now constrained to {workspacePath}.",
-                    DateTimeOffset.UtcNow,
-                    Metadata: new Dictionary<string, string> { ["workspacePath"] = workspacePath })),
+                ActivityLogEntry.Builder
+                    .WithSequence(0)
+                    .WithKind(ActivityKind.Status)
+                    .WithStatus(ActivityStatus.Completed)
+                    .WithSeverity(ActivitySeverity.Information)
+                    .WithTitle("Workspace updated")
+                    .WithMessage($"Agent tool execution is now constrained to {workspacePath}.")
+                    .WithTimestampUtc(DateTimeOffset.UtcNow)
+                    .WithMetadata(new Dictionary<string, string> { ["workspacePath"] = workspacePath })
+                    .Build()),
             cancellationToken);
 
         return workspacePath;
@@ -78,20 +79,21 @@ public sealed class AgentWorkbenchService : IAgentWorkbenchService
         await _activitySink.PublishAsync(
             new ActivityStreamEnvelope(
                 "workbench",
-                new ActivityLogEntry(
-                    0,
-                    ActivityKind.Status,
-                    ActivityStatus.Completed,
-                    ActivitySeverity.Information,
-                    "Global model updated",
-                    $"The coordinator and all agents will now use {configuration.SelectedProviderId} / {configuration.SelectedModelId}.",
-                    DateTimeOffset.UtcNow,
-                    Metadata: new Dictionary<string, string>
+                ActivityLogEntry.Builder
+                    .WithSequence(0)
+                    .WithKind(ActivityKind.Status)
+                    .WithStatus(ActivityStatus.Completed)
+                    .WithSeverity(ActivitySeverity.Information)
+                    .WithTitle("Global model updated")
+                    .WithMessage($"The coordinator and all agents will now use {configuration.SelectedProviderId} / {configuration.SelectedModelId}.")
+                    .WithTimestampUtc(DateTimeOffset.UtcNow)
+                    .WithMetadata(new Dictionary<string, string>
                     {
                         ["providerId"] = configuration.SelectedProviderId,
                         ["modelId"] = configuration.SelectedModelId,
                         ["apiKeyConfigured"] = configuration.ApiKeyConfigured.ToString()
-                    })),
+                    })
+                    .Build()),
             cancellationToken);
 
         return configuration;

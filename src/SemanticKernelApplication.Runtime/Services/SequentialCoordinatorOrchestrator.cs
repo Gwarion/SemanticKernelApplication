@@ -37,13 +37,14 @@ public sealed class SequentialCoordinatorOrchestrator : ICoordinatorOrchestrator
         {
             await PublishAsync(ActivityKind.Coordination, ActivityStatus.Completed, "No agents available", "Create an agent from the studio panel to start coordinating work.", thread.ThreadId, cancellationToken);
 
-            return new CoordinationResult(
-                request.OperationId,
-                ActivityStatus.Completed,
-                thread,
-                [],
-                "No agents were available to run.",
-                "No enabled agents");
+            return CoordinationResult.Builder
+                .WithOperationId(request.OperationId)
+                .WithStatus(ActivityStatus.Completed)
+                .WithThread(thread)
+                .WithRounds([])
+                .WithSummary("No agents were available to run.")
+                .WithCompletionReason("No enabled agents")
+                .Build();
         }
 
         for (var round = 1; round <= Math.Max(1, request.Coordinator.Policy.MaxRounds); round++)
@@ -58,7 +59,14 @@ public sealed class SequentialCoordinatorOrchestrator : ICoordinatorOrchestrator
                     continue;
                 }
 
-                await PublishAsync(ActivityKind.AgentExecution, ActivityStatus.Running, $"Running {agentDefinition.Name}", agentDefinition.Description, thread.ThreadId, cancellationToken, agentDefinition.Id);
+                await PublishAsync(
+                    ActivityKind.AgentExecution,
+                    ActivityStatus.Running,
+                    $"Running {agentDefinition.Name}",
+                    agentDefinition.Description,
+                    thread.ThreadId,
+                    cancellationToken,
+                    agentDefinition.Id);
 
                 var executionRequest = new AgentExecutionRequest(
                     request.OperationId,
@@ -79,14 +87,15 @@ public sealed class SequentialCoordinatorOrchestrator : ICoordinatorOrchestrator
                 var content = executionResult.Status == AgentExecutionStatus.Failed
                     ? $"{agentDefinition.Name} could not complete that step. Check the exceptions panel for details."
                     : executionResult.Output ?? executionResult.Summary ?? $"{agentDefinition.Name} completed.";
-                var message = new ConversationMessage(
-                    Guid.NewGuid().ToString("N"),
-                    thread.ThreadId,
-                    ConversationMessageRole.Assistant,
-                    agentDefinition.Id,
-                    content,
-                    DateTimeOffset.UtcNow,
-                    turnId);
+                var message = ConversationMessage.Builder
+                    .WithMessageId(Guid.NewGuid().ToString("N"))
+                    .WithThreadId(thread.ThreadId)
+                    .WithRole(ConversationMessageRole.Assistant)
+                    .WithAuthorId(agentDefinition.Id)
+                    .WithContent(content)
+                    .WithCreatedAtUtc(DateTimeOffset.UtcNow)
+                    .WithTurnId(turnId)
+                    .Build();
 
                 roundMessages.Add(message);
                 summaries.Add($"{agentDefinition.Name}: {executionResult.Summary ?? executionResult.Output}");
@@ -107,11 +116,11 @@ public sealed class SequentialCoordinatorOrchestrator : ICoordinatorOrchestrator
 
             if (roundMessages.Count > 0)
             {
-                thread = thread with
-                {
-                    Messages = [.. thread.Messages, .. roundMessages],
-                    UpdatedAtUtc = DateTimeOffset.UtcNow
-                };
+                thread = thread
+                    .ToBuilder()
+                    .WithMessages([.. thread.Messages, .. roundMessages])
+                    .WithUpdatedAtUtc(DateTimeOffset.UtcNow)
+                    .Build();
 
                 thread = await _conversationStore.SaveAsync(thread, cancellationToken);
                 rounds.Add(new CoordinationRound(round, roundMessages));
@@ -124,13 +133,14 @@ public sealed class SequentialCoordinatorOrchestrator : ICoordinatorOrchestrator
 
         await PublishAsync(ActivityKind.Workflow, ActivityStatus.Completed, "Coordinator completed", summary, thread.ThreadId, cancellationToken);
 
-        return new CoordinationResult(
-            request.OperationId,
-            ActivityStatus.Completed,
-            thread,
-            rounds,
-            summary,
-            "Completed");
+        return CoordinationResult.Builder
+            .WithOperationId(request.OperationId)
+            .WithStatus(ActivityStatus.Completed)
+            .WithThread(thread)
+            .WithRounds(rounds)
+            .WithSummary(summary)
+            .WithCompletionReason("Completed")
+            .Build();
     }
 
     private static string ResolveParticipantName(ConversationThread thread, string authorId)
@@ -145,10 +155,47 @@ public sealed class SequentialCoordinatorOrchestrator : ICoordinatorOrchestrator
         string title,
         string message,
         string threadId,
+        CancellationToken cancellationToken)
+    {
+        return PublishAsync(kind, status, title, message, threadId, cancellationToken, agentId: null);
+    }
+
+    private ValueTask PublishAsync(
+        ActivityKind kind,
+        ActivityStatus status,
+        string title,
+        string message,
+        string threadId,
         CancellationToken cancellationToken,
-        string? agentId = null,
-        string? failureReason = null,
-        IReadOnlyDictionary<string, string>? metadata = null)
+        string agentId)
+    {
+        return PublishAsyncCore(kind, status, title, message, threadId, cancellationToken, agentId, failureReason: null, metadata: null);
+    }
+
+    private ValueTask PublishAsync(
+        ActivityKind kind,
+        ActivityStatus status,
+        string title,
+        string message,
+        string threadId,
+        CancellationToken cancellationToken,
+        string? agentId,
+        string? failureReason,
+        IReadOnlyDictionary<string, string>? metadata)
+    {
+        return PublishAsyncCore(kind, status, title, message, threadId, cancellationToken, agentId, failureReason, metadata);
+    }
+
+    private ValueTask PublishAsyncCore(
+        ActivityKind kind,
+        ActivityStatus status,
+        string title,
+        string message,
+        string threadId,
+        CancellationToken cancellationToken,
+        string? agentId,
+        string? failureReason,
+        IReadOnlyDictionary<string, string>? metadata)
     {
         Dictionary<string, string>? activityMetadata = null;
 
@@ -173,17 +220,18 @@ public sealed class SequentialCoordinatorOrchestrator : ICoordinatorOrchestrator
         return _activitySink.PublishAsync(
             new ActivityStreamEnvelope(
                 threadId,
-                new ActivityLogEntry(
-                    0,
-                    kind,
-                    status,
-                    status == ActivityStatus.Failed ? ActivitySeverity.Error : ActivitySeverity.Information,
-                    title,
-                    message,
-                    DateTimeOffset.UtcNow,
-                    ConversationId: threadId,
-                    AgentId: agentId,
-                    Metadata: activityMetadata)),
+                ActivityLogEntry.Builder
+                    .WithSequence(0)
+                    .WithKind(kind)
+                    .WithStatus(status)
+                    .WithSeverity(status == ActivityStatus.Failed ? ActivitySeverity.Error : ActivitySeverity.Information)
+                    .WithTitle(title)
+                    .WithMessage(message)
+                    .WithTimestampUtc(DateTimeOffset.UtcNow)
+                    .WithConversationId(threadId)
+                    .WithAgentId(agentId)
+                    .WithMetadata(activityMetadata)
+                    .Build()),
             cancellationToken);
     }
 }

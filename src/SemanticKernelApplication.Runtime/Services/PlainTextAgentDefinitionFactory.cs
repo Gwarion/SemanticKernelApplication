@@ -26,24 +26,26 @@ public sealed class PlainTextAgentDefinitionFactory
             .Take(3)
             .ToArray();
 
-        var instructions = new AgentInstructionSet(
-            $"You are {name}. {description}",
-            goals,
-            ["Keep responses concise, actionable, and safe for display in the activity panel."]);
+        var instructions = AgentInstructionSet.Builder
+            .WithSystemPrompt($"You are {name}. {description}")
+            .WithGoals(goals)
+            .WithConstraints(["Keep responses concise, actionable, and safe for display in the activity panel."])
+            .Build();
 
-        return new AgentDefinition(
-            Guid.NewGuid().ToString("N"),
-            name,
-            AgentKind.UserDefined,
-            role,
-            instructions,
-            provider?.Id,
-            Tags: ExtractTags(description),
-            Metadata: new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        return AgentDefinition.Builder
+            .WithId(Guid.NewGuid().ToString("N"))
+            .WithName(name)
+            .WithKind(AgentKind.UserDefined)
+            .WithDescription(role)
+            .WithInstructions(instructions)
+            .WithProviderId(provider?.Id)
+            .WithTags(ExtractTags(description))
+            .WithMetadata(new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
             {
                 ["source"] = "plaintext",
                 ["rawDescription"] = description
-            });
+            })
+            .Build();
     }
 
     private static string BuildName(string description)

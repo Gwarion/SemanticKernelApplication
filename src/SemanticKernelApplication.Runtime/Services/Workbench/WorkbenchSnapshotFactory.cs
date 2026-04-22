@@ -39,7 +39,7 @@ public sealed class WorkbenchSnapshotFactory : IWorkbenchSnapshotFactory
         _conversationSessionAccessor = conversationSessionAccessor;
     }
 
-    public async Task<WorkbenchSnapshot> CreateAsync(string? conversationId = null, CancellationToken cancellationToken = default)
+    public async Task<WorkbenchSnapshot> GetWorkbenchSnapshotAsync(string? conversationId = null, CancellationToken cancellationToken = default)
     {
         var agents = await _agentDefinitionStore.ListAsync(cancellationToken);
         var effectiveConversationId = string.IsNullOrWhiteSpace(conversationId)
