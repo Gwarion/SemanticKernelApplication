@@ -4,92 +4,35 @@
 <PageTitle>Agent Workbench</PageTitle>
 
 <div class="workbench">
-    <section class="setup-card">
-        <div class="setup-header">
+    <section class="workbench-header">
+        <div class="workbench-title-row">
             <div>
-                <p class="panel-label">Setup</p>
-                <h3>Saved local configuration</h3>
+                <h1 class="panel-label">Workbench</h1>
             </div>
-            <div class="setup-stats">
-                <span>@Agents.Count agents</span>
-                <span>@Providers.Count providers</span>
-                <span>@KnownWorkspacePaths.Count workspaces</span>
+            <div class="workbench-header-actions">
+                <div class="workbench-stats">
+                    <span>@Agents.Count agents</span>
+                    <span>@Providers.Count providers</span>
+                    <span>@KnownWorkspacePaths.Count workspaces</span>
+                </div>
+                <button type="button" class="settings-button" @onclick="OpenSettings" aria-label="Open settings">
+                    <span class="settings-button-icon">&#9881;</span>
+                    <span>Settings</span>
+                </button>
             </div>
         </div>
-
-        <div class="setup-grid">
-            <div class="setup-field">
-                <label for="workspace-path">Saved workspace</label>
-                <div class="setup-row">
-                    <select id="workspace-path" @bind="WorkspacePathInput">
-                        @foreach (var workspacePath in WorkspaceSuggestions)
-                        {
-                            <option value="@workspacePath">@workspacePath</option>
-                        }
-                    </select>
-                    <button class="primary-button" @onclick="ApplyWorkspaceAsync" disabled="@(!CanApplyWorkspace)">
-                        @(IsWorkspaceBusy ? "Applying..." : "Use")
-                    </button>
-                </div>
-                <small>Active: @ActiveWorkspacePath</small>
-            </div>
-
-            <div class="setup-field">
-                <label for="new-workspace-path">Add workspace</label>
-                <div class="setup-row">
-                    <input id="new-workspace-path"
-                           @bind="NewWorkspacePathInput"
-                           @bind:event="oninput"
-                           placeholder="C:\Projects\AnotherWorkspace" />
-                    <button class="primary-button" @onclick="AddWorkspaceAsync" disabled="@(!CanAddWorkspace)">
-                        @(IsWorkspaceBusy ? "Adding..." : "Add")
-                    </button>
-                </div>
-                <small>Adds the folder to the saved workspace list and selects it immediately.</small>
-            </div>
-
-            <div class="setup-field">
-                <label for="global-provider">Provider</label>
-                <div class="setup-row">
-                    <select id="global-provider" value="@SelectedProviderId" @onchange="OnProviderChanged">
-                        @foreach (var provider in Providers)
-                        {
-                            <option value="@provider.Id">@provider.DisplayName (@provider.Kind)</option>
-                        }
-                    </select>
-                    <button class="primary-button" @onclick="ApplyModelAsync" disabled="@(!CanApplyModel)">
-                        @(IsModelBusy ? "Updating..." : "Apply")
-                    </button>
-                </div>
-                <small>Current provider: @(SelectedProvider?.DisplayName ?? "None")</small>
-            </div>
-
-            <div class="setup-field">
-                <label for="global-model">Model</label>
-                <select id="global-model" @bind="SelectedModelId">
-                    @foreach (var model in AvailableModels)
-                    {
-                        <option value="@model.Id">@model.DisplayName</option>
-                    }
-                </select>
-                <small>Current model: @CurrentModelLabel</small>
-            </div>
-
-            <div class="setup-field">
-                <label for="api-key">Override API key</label>
-                <input id="api-key"
-                       type="password"
-                       @bind="ApiKeyInput"
-                       @bind:event="oninput"
-                       placeholder="Paste a key for the selected provider" />
-                <small>@(ApiKeyConfigured ? "A saved key is loaded for this provider. Saving will override it." : "No saved key is loaded for this provider yet.")</small>
-            </div>
+        <div class="workbench-info-strip">
+            <article class="info-chip" title="@CurrentWorkspaceSummary">
+                <span class="summary-label">Current session</span>
+                <strong>@CurrentWorkspaceName</strong>
+                <small>@CurrentWorkspaceSummary</small>
+            </article>
+            <article class="info-chip" title="@CurrentModelSummary">
+                <span class="summary-label">Saved defaults</span>
+                <strong>@(SelectedProvider?.DisplayName ?? "No provider selected")</strong>
+                <small>@CurrentModelSummary</small>
+            </article>
         </div>
-
-        @if (!string.IsNullOrWhiteSpace(SetupFeedback))
-        {
-            <p class="setup-feedback">@SetupFeedback</p>
-        }
     </section>
 
     <section class="main-grid">
@@ -129,7 +72,7 @@
                 <label for="chat-message">Brief the coordinator</label>
                 <textarea id="chat-message" rows="5" @bind="ChatMessage" placeholder="Example: Create an agent that reviews PRs for security regressions, then summarize how it will help the team."></textarea>
                 <div class="composer-actions">
-                    <span>@(IsBusy ? "Coordinator is working..." : "Ready")</span>
+                    <span>@(IsBusy ? "Coordinator is working..." : "Waiting for instruction...")</span>
                     <button class="primary-button" @onclick="SendAsync" disabled="@IsBusy">Send</button>
                 </div>
             </div>
@@ -265,3 +208,105 @@
         </section>
     </details>
 </div>
+
+@if (IsSettingsOpen)
+{
+    <div class="settings-modal-backdrop" @onclick="CloseSettings">
+        <section class="settings-modal" @onclick:stopPropagation="true" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+            <div class="settings-modal-header">
+                <div>
+                    <p class="panel-label">Settings</p>
+                    <h3 id="settings-title">Workbench settings</h3>
+                </div>
+                <button type="button" class="settings-close" @onclick="CloseSettings" aria-label="Close settings">Close</button>
+            </div>
+
+            <div class="settings-modal-body">
+                <section class="settings-section @GetIndicatorClass(true)">
+                    <div class="settings-section-header">
+                        <div class="settings-heading-line">
+                            <h4>Configure local workspace</h4>
+                        </div>
+                    </div>
+
+                    <div class="settings-field-grid">
+                        <div class="settings-field">
+                            <label for="workspace-path" title="Choose a saved workspace for the current browser session">Saved workspace</label>
+                            <div class="settings-input-row">
+                                <select id="workspace-path" @bind="WorkspacePathInput">
+                                    @foreach (var workspacePath in WorkspaceSuggestions)
+                                    {
+                                        <option value="@workspacePath">@workspacePath</option>
+                                    }
+                                </select>
+                                <button class="primary-button" @onclick="ApplyWorkspaceAsync" disabled="@(!CanApplyWorkspace)">
+                                    @(IsWorkspaceBusy ? "Applying..." : "Use")
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="settings-field">
+                            <label for="new-workspace-path" title="Add a folder to the saved workspace list and switch the session to it">Add workspace</label>
+                            <div class="settings-input-row">
+                                <input id="new-workspace-path"
+                                       @bind="NewWorkspacePathInput"
+                                       @bind:event="oninput"
+                                       placeholder="C:\Projects\AnotherWorkspace" />
+                                <button class="primary-button" @onclick="AddWorkspaceAsync" disabled="@(!CanAddWorkspace)">
+                                    @(IsWorkspaceBusy ? "Adding..." : "Add")
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                </section>
+
+                <section class="settings-section @GetIndicatorClass(false)">
+                    <div class="settings-section-header">
+                        <div class="settings-heading-line">
+                            <h4>Configure AI models</h4>
+                        </div>
+                    </div>
+
+                    <div class="settings-field-grid settings-field-grid-compact">
+                        <div class="settings-field">
+                            <label for="global-provider" title="Select the model provider to save as the local default">Provider</label>
+                            <select id="global-provider" value="@SelectedProviderId" @onchange="OnProviderChanged">
+                                @foreach (var provider in Providers)
+                                {
+                                    <option value="@provider.Id">@provider.DisplayName (@provider.Kind)</option>
+                                }
+                            </select>
+                        </div>
+
+                        <div class="settings-field">
+                            <label for="global-model" title="Select the model saved for future sessions">Model</label>
+                            <select id="global-model" @bind="SelectedModelId">
+                                @foreach (var model in AvailableModels)
+                                {
+                                    <option value="@model.Id">@model.DisplayName</option>
+                                }
+                            </select>
+                        </div>
+
+                        <div class="settings-field settings-field-full">
+                            <label for="api-key" title="Optional provider key saved locally on this machine">API key</label>
+                            <input id="api-key"
+                                   type="password"
+                                   @bind="ApiKeyInput"
+                                   @bind:event="oninput"
+                                   placeholder="Paste a key for the selected provider" />
+                            <small>@(ApiKeyConfigured ? "Previous key has been loaded" : "No key loaded yet.")</small>
+                        </div>
+                    </div>
+
+                    <div class="settings-actions">
+                        <button class="primary-button" @onclick="ApplyModelAsync" disabled="@(!CanApplyModel)">
+                            @(IsModelBusy ? "Saving..." : "Use model")
+                        </button>
+                    </div>
+                </section>
+            </div>
+        </section>
+    </div>
+}

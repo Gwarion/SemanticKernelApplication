@@ -6,6 +6,7 @@ using SemanticKernelApplication.Abstractions.Conversations;
 using SemanticKernelApplication.Abstractions.Providers;
 using SemanticKernelApplication.Abstractions.Workbench;
 using SemanticKernelApplication.Web.Services;
+using System.IO;
 
 namespace SemanticKernelApplication.Web.Components.Pages;
 
@@ -26,7 +27,6 @@ public partial class Home : IAsyncDisposable
     private string NewWorkspacePathInput { get; set; } = string.Empty;
     private string ActiveWorkspacePath { get; set; } = string.Empty;
     private string ApiKeyInput { get; set; } = string.Empty;
-    private string SetupFeedback { get; set; } = string.Empty;
     private string? ActiveConversationId { get; set; }
     private string? SelectedProviderId { get; set; }
     private string? SelectedModelId { get; set; }
@@ -34,6 +34,11 @@ public partial class Home : IAsyncDisposable
     private bool IsBusy { get; set; }
     private bool IsWorkspaceBusy { get; set; }
     private bool IsModelBusy { get; set; }
+    private bool IsSettingsOpen { get; set; }
+    private SaveIndicatorState WorkspaceIndicator { get; set; } = SaveIndicatorState.Idle;
+    private SaveIndicatorState ModelIndicator { get; set; } = SaveIndicatorState.Idle;
+    private int _workspaceIndicatorVersion;
+    private int _modelIndicatorVersion;
 
     private IJSObjectReference? _module;
     private IJSObjectReference? _subscription;
@@ -70,6 +75,21 @@ public partial class Home : IAsyncDisposable
         SelectedProvider is null
             ? "None"
             : $"{SelectedProvider.DisplayName} / {SelectedProvider.Models.FirstOrDefault(model => model.Id == SelectedModelId)?.DisplayName ?? SelectedModelId}";
+
+    private string CurrentWorkspaceName =>
+        string.IsNullOrWhiteSpace(ActiveWorkspacePath)
+            ? "No workspace selected"
+            : Path.GetFileName(ActiveWorkspacePath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+
+    private string CurrentWorkspaceSummary =>
+        string.IsNullOrWhiteSpace(ActiveWorkspacePath)
+            ? "No session workspace yet"
+            : ActiveWorkspacePath;
+
+    private string CurrentModelSummary =>
+        SelectedProvider is null
+            ? "No saved defaults yet"
+            : CurrentModelLabel;
 
     private ModelProviderDefinition? SelectedProvider =>
         Providers.FirstOrDefault(provider => provider.Id == SelectedProviderId);
@@ -132,18 +152,17 @@ public partial class Home : IAsyncDisposable
         }
 
         IsWorkspaceBusy = true;
-        SetupFeedback = string.Empty;
 
         try
         {
             ActiveWorkspacePath = await Workbench.SetWorkspaceAsync(new WorkspaceSelectionRequest(WorkspacePathInput.Trim()));
             WorkspacePathInput = ActiveWorkspacePath;
-            SetupFeedback = "Workspace updated for the current workbench session.";
             await RefreshSnapshotAsync();
+            await PulseIndicatorAsync(isWorkspace: true, SaveIndicatorState.Success);
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            SetupFeedback = ex.Message;
+            await PulseIndicatorAsync(isWorkspace: true, SaveIndicatorState.Error);
         }
         finally
         {
@@ -164,7 +183,6 @@ public partial class Home : IAsyncDisposable
         if (string.Equals(ActiveWorkspacePath, WorkspacePathInput, StringComparison.OrdinalIgnoreCase))
         {
             NewWorkspacePathInput = string.Empty;
-            SetupFeedback = "Workspace added to the saved list and selected for the current bench.";
         }
     }
 
@@ -176,7 +194,6 @@ public partial class Home : IAsyncDisposable
         }
 
         IsModelBusy = true;
-        SetupFeedback = string.Empty;
 
         try
         {
@@ -186,17 +203,27 @@ public partial class Home : IAsyncDisposable
             SelectedModelId = configuration.SelectedModelId;
             ApiKeyConfigured = configuration.ApiKeyConfigured;
             ApiKeyInput = configuration.ApiKey ?? string.Empty;
-            SetupFeedback = "Provider settings were saved locally. You can override this key any time from the setup form.";
             await RefreshSnapshotAsync();
+            await PulseIndicatorAsync(isWorkspace: false, SaveIndicatorState.Success);
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            SetupFeedback = ex.Message;
+            await PulseIndicatorAsync(isWorkspace: false, SaveIndicatorState.Error);
         }
         finally
         {
             IsModelBusy = false;
         }
+    }
+
+    private void OpenSettings()
+    {
+        IsSettingsOpen = true;
+    }
+
+    private void CloseSettings()
+    {
+        IsSettingsOpen = false;
     }
 
     private async Task CreateAgentAsync()
@@ -287,6 +314,45 @@ public partial class Home : IAsyncDisposable
         ApiKeyConfigured = !string.IsNullOrWhiteSpace(provider?.SavedApiKey);
     }
 
+    private string GetIndicatorClass(bool isWorkspace)
+    {
+        var state = isWorkspace ? WorkspaceIndicator : ModelIndicator;
+        return state switch
+        {
+            SaveIndicatorState.Success => "settings-section-save-success",
+            SaveIndicatorState.Error => "settings-section-save-error",
+            _ => string.Empty
+        };
+    }
+
+    private async Task PulseIndicatorAsync(bool isWorkspace, SaveIndicatorState state)
+    {
+        if (isWorkspace)
+        {
+            var version = ++_workspaceIndicatorVersion;
+            WorkspaceIndicator = state;
+            await InvokeAsync(StateHasChanged);
+            await Task.Delay(1400);
+            if (version == _workspaceIndicatorVersion)
+            {
+                WorkspaceIndicator = SaveIndicatorState.Idle;
+                await InvokeAsync(StateHasChanged);
+            }
+
+            return;
+        }
+
+        var modelVersion = ++_modelIndicatorVersion;
+        ModelIndicator = state;
+        await InvokeAsync(StateHasChanged);
+        await Task.Delay(1400);
+        if (modelVersion == _modelIndicatorVersion)
+        {
+            ModelIndicator = SaveIndicatorState.Idle;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
     private void MergeActivity(IEnumerable<ActivityViewModel> events)
     {
         foreach (var item in events.OrderBy(item => item.Sequence))
@@ -368,5 +434,12 @@ public partial class Home : IAsyncDisposable
         string? ExceptionDetails)
     {
         public bool IsError => string.Equals(Severity, "Error", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private enum SaveIndicatorState
+    {
+        Idle,
+        Success,
+        Error
     }
 }

@@ -39,7 +39,16 @@ public sealed class LocalWorkbenchConfigurationStore : ILocalWorkbenchConfigurat
             Models =
             [
                 new AgentModelRegistration { Id = "gpt-5.4", DisplayName = "GPT-5.4", IsDefault = true },
-                new AgentModelRegistration { Id = "gpt-5.4-mini", DisplayName = "GPT-5.4 Mini" }
+                new AgentModelRegistration { Id = "gpt-5.4-mini", DisplayName = "GPT-5.4 Mini" },
+                new AgentModelRegistration { Id = "gpt-5.4-nano", DisplayName = "GPT-5.4 Nano" },
+                new AgentModelRegistration { Id = "gpt-5.2", DisplayName = "GPT-5.2" },
+                new AgentModelRegistration { Id = "gpt-5.1", DisplayName = "GPT-5.1" },
+                new AgentModelRegistration { Id = "gpt-5", DisplayName = "GPT-5" },
+                new AgentModelRegistration { Id = "gpt-4.1", DisplayName = "GPT-4.1" },
+                new AgentModelRegistration { Id = "gpt-4.1-mini", DisplayName = "GPT-4.1 Mini" },
+                new AgentModelRegistration { Id = "gpt-4.1-nano", DisplayName = "GPT-4.1 Nano" },
+                new AgentModelRegistration { Id = "gpt-4o", DisplayName = "GPT-4o" },
+                new AgentModelRegistration { Id = "gpt-4o-mini", DisplayName = "GPT-4o Mini" }
             ]
         },
         new AgentProviderRegistration
@@ -49,8 +58,15 @@ public sealed class LocalWorkbenchConfigurationStore : ILocalWorkbenchConfigurat
             Kind = AiProviderKind.GoogleGemini,
             Models =
             [
-                new AgentModelRegistration { Id = "gemini-2.5-flash", DisplayName = "Gemini 2.5 Flash", IsDefault = true },
-                new AgentModelRegistration { Id = "gemini-2.5-pro", DisplayName = "Gemini 2.5 Pro" }
+                new AgentModelRegistration { Id = "gemini-3-pro-preview", DisplayName = "Gemini 3 Pro Preview", IsDefault = true },
+                new AgentModelRegistration { Id = "gemini-3-flash-preview", DisplayName = "Gemini 3 Flash Preview" },
+                new AgentModelRegistration { Id = "gemini-2.5-flash-preview-09-2025", DisplayName = "Gemini 2.5 Flash Preview" },
+                new AgentModelRegistration { Id = "gemini-2.5-flash-lite-preview-09-2025", DisplayName = "Gemini 2.5 Flash-Lite Preview" },
+                new AgentModelRegistration { Id = "gemini-2.5-pro", DisplayName = "Gemini 2.5 Pro" },
+                new AgentModelRegistration { Id = "gemini-2.5-flash", DisplayName = "Gemini 2.5 Flash" },
+                new AgentModelRegistration { Id = "gemini-2.5-flash-lite", DisplayName = "Gemini 2.5 Flash-Lite" },
+                new AgentModelRegistration { Id = "gemini-2.0-flash", DisplayName = "Gemini 2.0 Flash" },
+                new AgentModelRegistration { Id = "gemini-2.0-flash-lite", DisplayName = "Gemini 2.0 Flash-Lite" }
             ]
         },
         new AgentProviderRegistration
@@ -60,8 +76,15 @@ public sealed class LocalWorkbenchConfigurationStore : ILocalWorkbenchConfigurat
             Kind = AiProviderKind.Anthropic,
             Models =
             [
-                new AgentModelRegistration { Id = "claude-3-7-sonnet-latest", DisplayName = "Claude 3.7 Sonnet", IsDefault = true },
-                new AgentModelRegistration { Id = "claude-3-5-haiku-latest", DisplayName = "Claude 3.5 Haiku" }
+                new AgentModelRegistration { Id = "claude-opus-4-7", DisplayName = "Claude Opus 4.7", IsDefault = true },
+                new AgentModelRegistration { Id = "claude-sonnet-4-6", DisplayName = "Claude Sonnet 4.6" },
+                new AgentModelRegistration { Id = "claude-haiku-4-5", DisplayName = "Claude Haiku 4.5" },
+                new AgentModelRegistration { Id = "claude-opus-4-6", DisplayName = "Claude Opus 4.6" },
+                new AgentModelRegistration { Id = "claude-sonnet-4-5", DisplayName = "Claude Sonnet 4.5" },
+                new AgentModelRegistration { Id = "claude-3-7-sonnet-latest", DisplayName = "Claude 3.7 Sonnet" },
+                new AgentModelRegistration { Id = "claude-3-5-sonnet-latest", DisplayName = "Claude 3.5 Sonnet" },
+                new AgentModelRegistration { Id = "claude-3-5-haiku-latest", DisplayName = "Claude 3.5 Haiku" },
+                new AgentModelRegistration { Id = "claude-3-haiku-20240307", DisplayName = "Claude 3 Haiku" }
             ]
         }
     ];
@@ -204,7 +227,7 @@ public sealed class LocalWorkbenchConfigurationStore : ILocalWorkbenchConfigurat
         {
             using var connection = OpenConnection();
             EnsureSchema(connection);
-            SeedCatalog(connection);
+            SyncCatalog(connection);
             LoadProviders(connection);
             LoadConfiguration(connection);
             UpsertKnownWorkspace(connection, _workspacePath);
@@ -287,16 +310,8 @@ public sealed class LocalWorkbenchConfigurationStore : ILocalWorkbenchConfigurat
         command.ExecuteNonQuery();
     }
 
-    private static void SeedCatalog(SqliteConnection connection)
+    private static void SyncCatalog(SqliteConnection connection)
     {
-        using var countCommand = connection.CreateCommand();
-        countCommand.CommandText = "SELECT COUNT(*) FROM provider_catalog;";
-        var count = Convert.ToInt32(countCommand.ExecuteScalar());
-        if (count > 0)
-        {
-            return;
-        }
-
         for (var providerIndex = 0; providerIndex < SeedProviders.Count; providerIndex++)
         {
             var provider = SeedProviders[providerIndex];
@@ -305,7 +320,14 @@ public sealed class LocalWorkbenchConfigurationStore : ILocalWorkbenchConfigurat
             providerCommand.CommandText =
                 """
                 INSERT INTO provider_catalog (provider_id, display_name, kind, endpoint, organization_id, is_default, sort_order)
-                VALUES ($providerId, $displayName, $kind, $endpoint, $organizationId, $isDefault, $sortOrder);
+                VALUES ($providerId, $displayName, $kind, $endpoint, $organizationId, $isDefault, $sortOrder)
+                ON CONFLICT(provider_id) DO UPDATE SET
+                    display_name = excluded.display_name,
+                    kind = excluded.kind,
+                    endpoint = excluded.endpoint,
+                    organization_id = excluded.organization_id,
+                    is_default = excluded.is_default,
+                    sort_order = excluded.sort_order;
                 """;
             providerCommand.Parameters.AddWithValue("$providerId", provider.Id);
             providerCommand.Parameters.AddWithValue("$displayName", provider.DisplayName);
@@ -323,7 +345,11 @@ public sealed class LocalWorkbenchConfigurationStore : ILocalWorkbenchConfigurat
                 modelCommand.CommandText =
                     """
                     INSERT INTO provider_models (provider_id, model_id, display_name, is_default, sort_order)
-                    VALUES ($providerId, $modelId, $displayName, $isDefault, $sortOrder);
+                    VALUES ($providerId, $modelId, $displayName, $isDefault, $sortOrder)
+                    ON CONFLICT(provider_id, model_id) DO UPDATE SET
+                        display_name = excluded.display_name,
+                        is_default = excluded.is_default,
+                        sort_order = excluded.sort_order;
                     """;
                 modelCommand.Parameters.AddWithValue("$providerId", provider.Id);
                 modelCommand.Parameters.AddWithValue("$modelId", model.Id);
@@ -332,6 +358,68 @@ public sealed class LocalWorkbenchConfigurationStore : ILocalWorkbenchConfigurat
                 modelCommand.Parameters.AddWithValue("$sortOrder", modelIndex);
                 modelCommand.ExecuteNonQuery();
             }
+        }
+
+        var providerIds = SeedProviders.Select(provider => provider.Id).ToArray();
+        var modelKeys = SeedProviders
+            .SelectMany(provider => provider.Models.Select(model => $"{provider.Id}|{model.Id}"))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var staleModels = new List<(string ProviderId, string ModelId)>();
+        using (var existingModelsCommand = connection.CreateCommand())
+        {
+            existingModelsCommand.CommandText = "SELECT provider_id, model_id FROM provider_models;";
+            using var modelReader = existingModelsCommand.ExecuteReader();
+            while (modelReader.Read())
+            {
+                var providerId = modelReader.GetString(0);
+                var modelId = modelReader.GetString(1);
+                if (!modelKeys.Contains($"{providerId}|{modelId}"))
+                {
+                    staleModels.Add((providerId, modelId));
+                }
+            }
+        }
+
+        foreach (var staleModel in staleModels)
+        {
+            using var deleteModelCommand = connection.CreateCommand();
+            deleteModelCommand.CommandText =
+                """
+                DELETE FROM provider_models
+                WHERE provider_id = $providerId AND model_id = $modelId;
+                """;
+            deleteModelCommand.Parameters.AddWithValue("$providerId", staleModel.ProviderId);
+            deleteModelCommand.Parameters.AddWithValue("$modelId", staleModel.ModelId);
+            deleteModelCommand.ExecuteNonQuery();
+        }
+
+        var staleProviders = new List<string>();
+        using (var existingProvidersCommand = connection.CreateCommand())
+        {
+            existingProvidersCommand.CommandText = "SELECT provider_id FROM provider_catalog;";
+            using var providerReader = existingProvidersCommand.ExecuteReader();
+            while (providerReader.Read())
+            {
+                var providerId = providerReader.GetString(0);
+                if (!providerIds.Contains(providerId, StringComparer.OrdinalIgnoreCase))
+                {
+                    staleProviders.Add(providerId);
+                }
+            }
+        }
+
+        foreach (var staleProvider in staleProviders)
+        {
+            using var deleteModelsCommand = connection.CreateCommand();
+            deleteModelsCommand.CommandText = "DELETE FROM provider_models WHERE provider_id = $providerId;";
+            deleteModelsCommand.Parameters.AddWithValue("$providerId", staleProvider);
+            deleteModelsCommand.ExecuteNonQuery();
+
+            using var deleteProviderCommand = connection.CreateCommand();
+            deleteProviderCommand.CommandText = "DELETE FROM provider_catalog WHERE provider_id = $providerId;";
+            deleteProviderCommand.Parameters.AddWithValue("$providerId", staleProvider);
+            deleteProviderCommand.ExecuteNonQuery();
         }
     }
 
